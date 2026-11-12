@@ -718,8 +718,11 @@ void BuildEngine::prepareBuild(bool rebuildAll)
     saveSignatures();
 
     if (objects.isEmpty()) {
-        emit output(QStringLiteral("*** Error: 没有可链接的目标文件"));
-        ++m_errors;
+        // 源文件缺失已经报过错了，这里不再重复计数
+        if (m_errors == 0) {
+            emit output(QStringLiteral("*** Error: 没有可链接的目标文件"));
+            ++m_errors;
+        }
         return;
     }
 

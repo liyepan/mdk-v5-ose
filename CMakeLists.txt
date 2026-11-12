@@ -10,6 +10,11 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
+# 资源编译器要早于第一个 target 启用，否则某些生成器会抱怨
+if(WIN32)
+    enable_language(RC)
+endif()
+
 find_package(Qt5 5.12 REQUIRED COMPONENTS Core Gui Widgets Xml)
 
 set(APP_SOURCES
@@ -69,6 +74,5 @@ if(WIN32)
     set_target_properties(mdk-v5-ose PROPERTIES WIN32_EXECUTABLE TRUE)
 
     # 资源文件里带 PerMonitorV2 的 DPI 清单
-    enable_language(RC)
     target_sources(mdk-v5-ose PRIVATE resources/app.rc)
 endif()
