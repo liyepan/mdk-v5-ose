@@ -190,6 +190,9 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_engine, &BuildEngine::status, this, [this](const QString& text) {
         m_statusMessage->setText(text);
     });
+    connect(m_engine, &BuildEngine::mapFileReady, this, [this](const QString& path) {
+        m_buildOutput->showMap(path);
+    });
 
     connect(m_tabs, &QTabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
     connect(m_tabs, &QTabWidget::currentChanged, this, [this](int) { updateEncodingLabel(); });

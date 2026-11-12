@@ -29,6 +29,7 @@ public:
 
     void showErrorList();
     void showLog();
+    void showMap(const QString& path);
 
     // 供菜单/快捷键调用
     void copyLogSelection();
@@ -48,5 +49,6 @@ private:
     QTabWidget*     m_tabs = nullptr;
     QPlainTextEdit* m_log = nullptr;
     QTreeWidget*    m_errors = nullptr;
+    QPlainTextEdit* m_map = nullptr;
     QString         m_projectDir;
 };

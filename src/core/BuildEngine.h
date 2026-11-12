@@ -62,6 +62,8 @@ signals:
     void diagnostic(const Diagnostic& d);
     void finished(bool success, int errors, int warnings);
     void status(const QString& text);
+    // 链接成功后可用的 .map 文件
+    void mapFileReady(const QString& path);
 
 private:
     enum class Mode { Build, Translate, Clean };
@@ -115,6 +117,7 @@ private:
     QString projectDir() const;
     QString outputDir() const;
     QString axfPath() const;
+    QString mapPath() const;
     QString libPath() const;
     QString cpuName() const;
 

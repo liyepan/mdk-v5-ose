@@ -73,6 +73,8 @@
 - 解析 .uvprojx（多 Target / Group / File / C-C++ / Linker / 钩子），写回时原地改 DOM
 - 工程树、Target 切换、双击打开源文件、语法高亮、行号、当前行高亮
 - Options for Target：Output / C/C++ / Linker 三页可回写工程
+- Build Output 只保留一行 Program Size（不再把 armlink 的按 .o 尺寸表打到控制台），
+  .map 明细放在独立的 Memory Map 标签页，链接成功后自动载入
 - Build Output 按类别着色：标题蓝、编译灰、Warning 琥珀、Error 红加粗、Program Size 绿、
   用户命令紫、汇总行成功绿/失败红
 - 现代浅色主题（Fusion + QSS）：页签强调线、工具栏 hover、圆角输入框、细滚动条，

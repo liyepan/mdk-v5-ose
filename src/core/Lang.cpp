@@ -106,6 +106,8 @@ const QHash<QString, QString>& dictionary()
         // ---- 停靠窗口 / 状态栏 ----
         add("Project", QStringLiteral("工程"));
         add("Build Output", QStringLiteral("编译输出"));
+        add("Error List", QStringLiteral("错误列表"));
+        add("Memory Map", QStringLiteral("内存映射"));
         add("Ready", QStringLiteral("就绪"));
         add("No Project", QStringLiteral("无工程"));
         add("Compiler: %1", QStringLiteral("编译器: %1"));

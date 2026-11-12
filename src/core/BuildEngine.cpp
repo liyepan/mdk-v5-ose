@@ -194,6 +194,13 @@ QString BuildEngine::axfPath() const
     return outputDir() + QLatin1Char('/') + name + QStringLiteral(".axf");
 }
 
+QString BuildEngine::mapPath() const
+{
+    const Target* t = currentTarget();
+    const QString name = t ? t->artifactName() : QStringLiteral("Project");
+    return outputDir() + QLatin1Char('/') + name + QStringLiteral(".map");
+}
+
 QString BuildEngine::libPath() const
 {
     const Target* t = currentTarget();
@@ -414,7 +421,8 @@ QStringList BuildEngine::linkArgs(const QStringList& objects) const
     if (t->useMicrolib)
         a << QStringLiteral("--library_type=microlib");
 
-    a << QStringLiteral("--info") << QStringLiteral("sizes,totals");
+    // 不要 --info sizes：那张按 .o 列尺寸的表会把 Build Output 刷满。
+    // uVision 也只打一行 Program Size，明细进 .map 文件。
     a << QStringLiteral("--map");
     a << QStringLiteral("-o") << native(axfPath());
 
@@ -1126,6 +1134,10 @@ void BuildEngine::onJobFinished(ActiveJob* active, int exitCode, int exitStatus)
     } else if (job.isLink && !m_axfForSize.isEmpty() && QFileInfo::exists(m_axfForSize)) {
         flushActive(active);      // 先把链接日志放出来，Program Size 再跟上
         emitProgramSize();
+
+        const QString map = mapPath();
+        if (QFileInfo::exists(map))
+            emit mapFileReady(map);
     }
 
     flushActive(active);

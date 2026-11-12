@@ -1,5 +1,6 @@
 #include "ui/BuildOutput.h"
 
+#include "core/Lang.h"
 #include "ui/KeilStyle.h"
 
 #include <QApplication>
@@ -13,6 +14,8 @@
 #include <QSaveFile>
 #include <QScrollBar>
 #include <QTabWidget>
+#include <QTextCursor>
+#include <QTextStream>
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QTextCharFormat>
@@ -183,7 +186,7 @@ BuildOutput::BuildOutput(QWidget* parent)
     m_log->setFont(KeilStyle::editorFont());
     m_log->setMaximumBlockCount(50000);
     m_log->setLineWrapMode(QPlainTextEdit::NoWrap);
-    m_tabs->addTab(m_log, QStringLiteral("Build Output"));
+    m_tabs->addTab(m_log, Lang::t("Build Output"));
 
     log->onDoubleClick = [this]() {
         if (!m_log)
@@ -211,6 +214,12 @@ BuildOutput::BuildOutput(QWidget* parent)
     m_errors->header()->setSectionResizeMode(2, QHeaderView::Stretch);
     m_tabs->addTab(m_errors, QStringLiteral("Error List"));
 
+    m_map = new QPlainTextEdit(this);
+    m_map->setReadOnly(true);
+    m_map->setFont(KeilStyle::editorFont());
+    m_map->setLineWrapMode(QPlainTextEdit::NoWrap);
+    m_tabs->addTab(m_map, Lang::t("Memory Map"));
+
     m_errors->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_errors, &QWidget::customContextMenuRequested, this, &BuildOutput::buildErrorMenu);
 
@@ -236,6 +245,8 @@ void BuildOutput::setProjectDir(const QString& dir)
 void BuildOutput::clear()
 {
     m_log->clear();
+    if (m_map)
+        m_map->clear();
 }
 
 void BuildOutput::appendLine(const QString& line)
@@ -282,6 +293,23 @@ void BuildOutput::showErrorList()
 void BuildOutput::showLog()
 {
     m_tabs->setCurrentWidget(m_log);
+}
+
+void BuildOutput::showMap(const QString& path)
+{
+    if (!m_map)
+        return;
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        m_map->setPlainText(QStringLiteral("// cannot open ") + path);
+        return;
+    }
+
+    QTextStream stream(&file);
+    stream.setCodec("UTF-8");
+    m_map->setPlainText(stream.readAll());
+    m_map->moveCursor(QTextCursor::Start);
 }
 
 // ---------------------------------------------------------------- 复制
