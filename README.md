@@ -160,6 +160,41 @@ CMake 配置阶段会直接报找不到 GL/gl.h。没有的话用 qmake 那条�
 - 响应文件（--via）还没做，源文件特别多的工程可能撞 Windows 命令行长度上限。
 - 调试和烧写是空实现。
 
+## 打包与 Release（GitHub Actions）
+
+`.github/workflows/package.yml` 负责出 Windows 安装包并自动发 Release：
+
+| Job | 产物 |
+|---|---|
+| windows-x86_64 | `uVision5-OSE-<版本>-win64-setup.exe`（NSIS）+ `-portable.zip` |
+| windows-arm64 | 同上，arm64（**默认关闭**，见下） |
+| release | 汇总产物 + `SHA256SUMS`，挂到 `v<版本>` 的 Release |
+
+版本号从 `mdk-v5-ose.pro` 的 `VERSION = x.y.z` 读，改版本只改这一处。
+
+### 关于 arm64
+
+**官方 Qt 5.15.2 没有 Windows arm64 的二进制包**（Qt for Windows on ARM 从 Qt 6.2 才有）。
+所以 arm64 job 默认不跑，需要两件事同时满足：
+
+1. 仓库 Variables 里设 `ENABLE_WIN_ARM64 = true`
+2. 提供一份 arm64 版 Qt5，路径填在 `WIN_ARM64_QT_DIR`
+
+没有 arm64 Qt 时，直接发 x64 包即可：Windows 11 on ARM 能模拟运行 x64 程序，功能一致，
+只是没有原生优化。
+
+### 安装包做了什么
+
+- 装到 `%ProgramFiles%\uVision5-OSE`，开始菜单 + 桌面快捷方式 + 控制面板卸载项
+- 给 `.uvprojx` 登记 **OpenWithProgids**（右键“打开方式”里出现），**不抢** Keil 的默认关联
+- 脚本在 `packaging/windows/installer.nsi`，本地可手动打：
+
+      makensis /DAPP_VERSION=0.2.0 /DDEPLOY_DIR=deploy packaging/windows/installer.nsi
+
+### 在 Gitea 上
+
+Gitea 也会读 `.github/workflows`，每个 job 都带
+`if: github.server_url == 'https://github.com'` 守卫，在 Gitea 上只会显示 skipped，不占 runner。
 ## 目录
 
     src/core/    工程模型、uvprojx 读写、工具链探测、构建引擎、诊断解析

@@ -1,6 +1,8 @@
 # build trees
 build/
 build-*/
+dist/
+deploy/
 out/
 cmake-build-*/
 CMakeFiles/

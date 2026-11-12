@@ -4,6 +4,12 @@ CONFIG   += c++17
 TARGET    = mdk-v5-ose
 TEMPLATE  = app
 
+# CI 从这个变量取版本号（.github/workflows/package.yml）
+VERSION   = 0.2.0
+
+# Windows 上用 GUI 子系统，别弹黑色控制台窗口
+win32: CONFIG += windows
+
 INCLUDEPATH += src
 
 SOURCES += \
