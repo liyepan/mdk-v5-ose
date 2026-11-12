@@ -179,7 +179,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_tabs->setIconSize(QSize(12, 12));
     // 用 Qt 自带的关闭按钮（位置由 QTabBar 自己算，天然居中），
     // 图标已经在 AppStyle::standardIcon 里换成我们画的细叉号
-    m_tabs->setTabsClosable(true);
+    m_tabs->setTabsClosable(false);   // 关闭按钮自己放，Qt 自带的画不出来(见下)
     m_tabs->setMovable(true);
     m_tabs->setDocumentMode(true);
     setCentralWidget(m_tabs);
@@ -778,6 +778,33 @@ void MainWindow::createStatusBar()
 
 // ---------------------------------------------------------------- 工程
 
+void MainWindow::installTabCloseButton(int index, CodeEditor* editor)
+{
+    // Qt 自带的 CloseButton 在 paintEvent 里画 PE_IndicatorTabClose 图元，
+    // 不读按钮 icon，各种改法都画不出来；换成普通 QToolButton 就正常了
+    auto* button = new QToolButton(m_tabs->tabBar());
+    button->setIcon(KeilStyle::icon(QStringLiteral("close"), 16));
+    button->setIconSize(QSize(12, 12));
+    button->setFixedSize(16, 16);
+    button->setAutoRaise(true);
+    button->setCursor(Qt::ArrowCursor);
+    button->setToolTip(QStringLiteral("Close"));
+    button->setObjectName(QStringLiteral("tabCloseButton"));
+
+    connect(button, &QToolButton::clicked, this, [this, editor]() {
+        QMetaObject::invokeMethod(
+            this,
+            [this, editor]() {
+                const int i = m_tabs->indexOf(editor);
+                if (i >= 0)
+                    onTabCloseRequested(i);
+            },
+            Qt::QueuedConnection);
+    });
+
+    m_tabs->tabBar()->setTabButton(index, QTabBar::RightSide, button);
+}
+
 void MainWindow::onNewFile()
 {
     static int untitledCounter = 0;
@@ -801,6 +828,7 @@ void MainWindow::onNewFile()
     const int index = m_tabs->addTab(editor, QStringLiteral("untitled%1").arg(++untitledCounter));
     m_tabs->setCurrentIndex(index);
     m_tabs->tabBar()->setTabData(index, nextTabColor());
+    installTabCloseButton(index, editor);
     editor->setFocus();
     updateEncodingLabel();
 }
@@ -1028,6 +1056,7 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     if (!m_fileTabColors.contains(abs))
         m_fileTabColors.insert(abs, nextTabColor());
     m_tabs->tabBar()->setTabData(index, m_fileTabColors.value(abs));
+    installTabCloseButton(index, editor);
     m_tabs->setCurrentIndex(index);
     updateEncodingLabel();
 

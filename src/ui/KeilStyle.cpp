@@ -581,8 +581,10 @@ QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 2px 6px 2px 10px; m
 QTabBar::tab:selected { background: #ffffff; color: #1f2328;
                         border-color: #c9d2dc; border-bottom: none; }
 QTabBar::tab:hover:!selected { background: #e4e9f0; }
-/* 不要在这里描述 QTabBar::close-button：QSS 一旦接管这个子控件，
-   没有 image: 就会画成空白，图标直接消失 */
+/* 页签上的关闭按钮是我们自己放的 QToolButton，按 objectName 选中 */
+QTabBar QToolButton#tabCloseButton { padding: 0px; margin: 0px; border: none;
+                                     border-radius: 3px; background: transparent; }
+QTabBar QToolButton#tabCloseButton:hover { background: #fbdad8; }
 QTabBar QToolButton:hover { background: #fbdad8; }
 QTabBar::close-button { border-radius: 4px; }
 
