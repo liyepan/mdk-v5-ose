@@ -265,6 +265,23 @@ void MainWindow::createMenus()
         m_buildOutput->showErrorList();
     });
     viewMenu->addSeparator();
+
+    QAction* zoomIn = viewMenu->addAction(QStringLiteral("Zoom In"));
+    zoomIn->setShortcuts({ QKeySequence::ZoomIn,
+                           QKeySequence(Qt::CTRL + Qt::Key_Plus),
+                           QKeySequence(Qt::CTRL + Qt::Key_Equal) });
+    connect(zoomIn, &QAction::triggered, this, [this]() { changeEditorZoom(1); });
+
+    QAction* zoomOut = viewMenu->addAction(QStringLiteral("Zoom Out"));
+    zoomOut->setShortcuts({ QKeySequence::ZoomOut,
+                            QKeySequence(Qt::CTRL + Qt::Key_Minus) });
+    connect(zoomOut, &QAction::triggered, this, [this]() { changeEditorZoom(-1); });
+
+    QAction* zoomReset = viewMenu->addAction(QStringLiteral("Reset Zoom"));
+    zoomReset->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_0));
+    connect(zoomReset, &QAction::triggered, this, &MainWindow::resetEditorZoom);
+
+    viewMenu->addSeparator();
     for (const QString& name : { QStringLiteral("Functions Window"),
                                  QStringLiteral("Source Browser"),
                                  QStringLiteral("Books Window") }) {
@@ -579,6 +596,10 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     }
 
     connect(editor, &CodeEditor::cursorPositionChanged, this, &MainWindow::onCursorMoved);
+    connect(editor, &CodeEditor::zoomRequested, this, &MainWindow::changeEditorZoom);
+
+    if (m_editorZoom > 0.0)
+        editor->setZoomPointSize(m_editorZoom);
 
     const int index = m_tabs->addTab(editor, QFileInfo(abs).fileName());
     m_tabs->setTabToolTip(index, abs);
@@ -635,6 +656,28 @@ void MainWindow::onSaveAll()
             if (!editor->saveFile(&error))
                 QMessageBox::warning(this, QStringLiteral("Save"), error);
         }
+    }
+}
+
+void MainWindow::changeEditorZoom(int delta)
+{
+    if (m_editorZoom <= 0.0)
+        m_editorZoom = KeilStyle::editorFont().pointSizeF();
+
+    m_editorZoom = qBound(6.0, m_editorZoom + delta, 48.0);
+
+    for (int i = 0; i < m_tabs->count(); ++i) {
+        if (auto* editor = qobject_cast<CodeEditor*>(m_tabs->widget(i)))
+            editor->setZoomPointSize(m_editorZoom);
+    }
+}
+
+void MainWindow::resetEditorZoom()
+{
+    m_editorZoom = KeilStyle::editorFont().pointSizeF();
+    for (int i = 0; i < m_tabs->count(); ++i) {
+        if (auto* editor = qobject_cast<CodeEditor*>(m_tabs->widget(i)))
+            editor->setZoomPointSize(m_editorZoom);
     }
 }
 

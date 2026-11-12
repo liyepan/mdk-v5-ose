@@ -12,8 +12,7 @@ FileKind fileKindFromPath(const QString& path)
     if (suffix == QLatin1String("cpp") || suffix == QLatin1String("cxx")
         || suffix == QLatin1String("cc") || suffix == QLatin1String("c++"))
         return FileKind::CppSource;
-    if (suffix == QLatin1String("s") || suffix == QLatin1String("asm")
-        || suffix == QLatin1String("sct") || suffix == QLatin1String("inc"))
+    if (suffix == QLatin1String("s") || suffix == QLatin1String("asm"))
         return FileKind::Assembly;
     if (suffix == QLatin1String("o") || suffix == QLatin1String("obj"))
         return FileKind::Object;
@@ -52,6 +51,8 @@ QStringList Target::allSourceFiles() const
 {
     QStringList out;
     for (const ProjGroup& g : groups) {
+        if (g.excluded)
+            continue;
         for (const ProjFile& f : g.files) {
             if (f.excluded)
                 continue;
@@ -70,6 +71,11 @@ QString Target::displayCpu() const
     if (m.hasMatch())
         return m.captured(1);
     return QStringLiteral("Cortex-M3");
+}
+
+QString Target::artifactName() const
+{
+    return outputName.isEmpty() ? QStringLiteral("Project") : outputName;
 }
 
 QString UvProject::directory() const
@@ -94,6 +100,15 @@ const Target* UvProject::target(int index) const
     if (index < 0 || index >= targets.size())
         return nullptr;
     return &targets[index];
+}
+
+int UvProject::indexOfTarget(const QString& name) const
+{
+    for (int i = 0; i < targets.size(); ++i) {
+        if (targets.at(i).name == name)
+            return i;
+    }
+    return -1;
 }
 
 QStringList splitOptionList(const QString& raw)

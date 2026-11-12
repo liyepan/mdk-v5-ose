@@ -58,6 +58,7 @@ Toolchain Toolchain::detect(const QString& binDir, const QString& preferFamily)
 
     tc.as = findTool(binDir, QStringLiteral("armasm"));
     tc.ld = findTool(binDir, QStringLiteral("armlink"));
+    tc.ar = findTool(binDir, QStringLiteral("armar"));
     tc.from = findTool(binDir, QStringLiteral("fromelf"));
     return tc;
 }

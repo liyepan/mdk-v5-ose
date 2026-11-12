@@ -13,6 +13,7 @@ struct Toolchain
     QString cc;         // armcc.exe    / armclang.exe
     QString as;         // armasm.exe   / armasm.exe
     QString ld;         // armlink.exe
+    QString ar;         // armar.exe（生成 .lib 时用）
     QString from;       // fromelf.exe
 
     bool    isValid() const { return !cc.isEmpty() && !ld.isEmpty(); }

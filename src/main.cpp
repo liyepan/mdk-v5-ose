@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QTimer>
 
 #include <cstdio>
@@ -109,6 +110,13 @@ int main(int argc, char* argv[])
     if (opt.build)
         return runHeadlessBuild(opt, argc, argv);
 
+    // 高 DPI：必须在 QApplication 构造之前设置。
+    // PassThrough 让 125% / 150% 这类非整数缩放按真实比例渲染，
+    // 而不是像默认 Round 那样被凑成 1x 或 2x（这正是 uVision 在 4K 屏上糊掉的原因）。
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+#endif
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 

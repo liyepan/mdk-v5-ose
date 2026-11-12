@@ -71,6 +71,9 @@ private:
     bool ensureToolchain();
     void reloadToolchain();
 
+    void changeEditorZoom(int delta);
+    void resetEditorZoom();
+
     CodeEditor* openFile(const QString& absolutePath);
     CodeEditor* currentEditor() const;
     void        setBusy(bool busy);
@@ -83,6 +86,7 @@ private:
     UvProject m_project;
     int       m_activeTarget = 0;
     bool      m_busy = false;
+    qreal     m_editorZoom = 0.0;   // 0 表示还没调过，用默认字号
 
     Toolchain   m_toolchain;
     BuildEngine* m_engine = nullptr;

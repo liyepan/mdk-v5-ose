@@ -111,15 +111,15 @@ void drawBug(QPainter& p, const QRectF& r)
     p.drawLine(QPointF(r.right() - 4.5, r.top() + 12.0), QPointF(r.right() - 1.5, r.top() + 13.5));
 }
 
-QIcon makeIcon(const QString& name, int size)
+// 所有图形都按 16x16 的逻辑坐标画，再整体缩放到目标尺寸，
+// 这样同一份代码既能画 16px 工具条，也能画 32px 窗口图标、96px 的 6x 屏。
+void paintIcon(QPainter& p, const QString& name, int size)
 {
-    QPixmap pm(size, size);
-    pm.fill(Qt::transparent);
-
-    QPainter p(&pm);
+    p.save();
+    p.scale(size / 16.0, size / 16.0);
     p.setRenderHint(QPainter::Antialiasing, false);
 
-    const QRectF r(1.5, 1.5, size - 3.0, size - 3.0);
+    const QRectF r(1.5, 1.5, 13.0, 13.0);
 
     if (name == QLatin1String("new")) {
         drawPage(p, r);
@@ -229,8 +229,28 @@ QIcon makeIcon(const QString& name, int size)
         drawPage(p, r);
     }
 
-    p.end();
-    return QIcon(pm);
+    p.restore();
+}
+
+// 为 1x / 2x / 3x 各生成一张位图塞进同一个 QIcon：
+// Qt 会按当前屏幕的 devicePixelRatio 自动挑最合适的那张，
+// 所以 150% / 200% 缩放下图标依然是清晰的，而不是被拉伸糊掉。
+QIcon makeIcon(const QString& name, int size)
+{
+    QIcon icon;
+    for (int factor = 1; factor <= 3; ++factor) {
+        QPixmap pm(size * factor, size * factor);
+        pm.setDevicePixelRatio(factor);
+        pm.fill(Qt::transparent);
+
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing, factor > 1);
+        paintIcon(p, name, size);
+        p.end();
+
+        icon.addPixmap(pm);
+    }
+    return icon;
 }
 
 } // namespace

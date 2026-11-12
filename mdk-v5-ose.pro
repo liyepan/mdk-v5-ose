@@ -40,4 +40,5 @@ HEADERS += \
 # MSVC 默认按系统 ANSI 代码页读源文件，源码里有中文，必须显式指定 UTF-8
 msvc: QMAKE_CXXFLAGS += /utf-8
 
-win32:RC_ICONS =
+# PerMonitorV2 的 DPI 清单
+win32: RC_FILE = resources/app.rc

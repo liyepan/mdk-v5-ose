@@ -24,6 +24,7 @@ struct ProjFile
     QString groupName;
     int     fileType = 0;
     bool    excluded = false;
+    bool    alwaysBuild = false;
 
     // 文件级覆盖选项（FileOption/FileArmAds/Cads/VariousControls）
     bool    hasOwnOptions = false;
@@ -37,7 +38,23 @@ struct ProjFile
 struct ProjGroup
 {
     QString name;
+    bool    excluded = false;
+
+    // 组级覆盖选项（GroupOption/GroupArmAds/Cads/VariousControls）
+    bool    hasOwnOptions = false;
+    QString defines;
+    QString includePaths;
+    QString misc;
+
     QList<ProjFile> files;
+};
+
+// uVision 的 Before Compile / Before Make / After Make 里的一条用户命令
+struct UserProgram
+{
+    bool    enabled = false;
+    QString command;              // 原样保存，运行时再切分
+    bool    stopOnExitCode = false;
 };
 
 // 一个 Target（uVision 的 Configuration）
@@ -45,7 +62,7 @@ struct Target
 {
     QString name;
     QString toolsetName;        // ARM-ADS
-    QString compilerVersion;    // pCCUsed
+    QString compilerVersion;    // pCCUsed 原文
     bool    ac6 = false;        // uAC6
 
     // ---- Target 页 ----
@@ -69,6 +86,7 @@ struct Target
     bool    optimizeForTime = false;
     bool    c99 = true;
     bool    cpp11 = false;
+    bool    gnuExtensions = false;  // uGnu -> --gnu
     bool    oneElfSectionPerFunction = false;
     bool    splitLoadStore = false;
     bool    interwork = true;
@@ -96,10 +114,16 @@ struct Target
     bool    noStartLib = false;
     bool    useMicrolib = false;
 
+    // ---- 构建前后钩子（每个阶段最多两条，uVision 允许 Prog1/Prog2）----
+    QList<UserProgram> beforeCompile;   // <BeforeCompile><UserProg1Name>...
+    QList<UserProgram> beforeMake;      // <BeforeMake>
+    QList<UserProgram> afterMake;       // <AfterMake>
+
     QList<ProjGroup> groups;
 
     QStringList allSourceFiles() const;
     QString     displayCpu() const;
+    QString     artifactName() const;   // OutputName，空则 "Project"
 };
 
 struct UvProject
@@ -114,6 +138,7 @@ struct UvProject
     bool    isValid() const { return !targets.isEmpty(); }
     Target* target(int index);
     const Target* target(int index) const;
+    int     indexOfTarget(const QString& name) const;
 };
 
 // 把 uvprojx 里用逗号/分号/空格混写的列表拆开

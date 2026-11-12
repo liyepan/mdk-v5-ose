@@ -1,12 +1,13 @@
 #include "core/BuildEngine.h"
 
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QTextStream>
-#include <QTime>
 
 namespace {
 
@@ -40,6 +41,34 @@ QStringList splitArgsLoose(const QString& raw)
     return out;
 }
 
+QStringList splitCommandLine(const QString& command)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    return QProcess::splitCommand(command);
+#else
+    QStringList out;
+    QString current;
+    bool quoted = false;
+    for (const QChar c : command) {
+        if (c == QLatin1Char('"')) {
+            quoted = !quoted;
+            continue;
+        }
+        if (!quoted && c.isSpace()) {
+            if (!current.isEmpty()) {
+                out << current;
+                current.clear();
+            }
+            continue;
+        }
+        current.append(c);
+    }
+    if (!current.isEmpty())
+        out << current;
+    return out;
+#endif
+}
+
 QString formatElapsed(qint64 ms)
 {
     const qint64 total = ms / 1000;
@@ -47,6 +76,53 @@ QString formatElapsed(qint64 ms)
     const qint64 m = (total % 3600) / 60;
     const qint64 s = total % 60;
     return QString::asprintf("%02lld:%02lld:%02lld", h, m, s);
+}
+
+// QProcess 在 Unix 上按【父进程】的 PATH 查找程序，不看我们塞给子进程的 PATH，
+// 所以像 AfterMake 里的 "fromelf.exe ..." 这种裸命令必须自己先解析成绝对路径。
+QString resolveProgram(const QString& program, const QString& binDir)
+{
+    if (program.isEmpty())
+        return program;
+    if (QFileInfo(program).isAbsolute() || program.contains(QLatin1Char('/'))
+        || program.contains(QLatin1Char('\\'))) {
+        return program;
+    }
+
+    QStringList dirs;
+    if (!binDir.isEmpty())
+        dirs << binDir;
+    dirs << QProcessEnvironment::systemEnvironment()
+                .value(QStringLiteral("PATH"))
+                .split(QDir::listSeparator(), Qt::SkipEmptyParts);
+
+    for (const QString& dir : dirs) {
+        const QString candidate = QDir(dir).absoluteFilePath(program);
+        if (QFileInfo(candidate).isFile() && QFileInfo(candidate).isExecutable())
+            return candidate;
+#ifdef Q_OS_WIN
+        const QString withExe = candidate + QStringLiteral(".exe");
+        if (QFileInfo(withExe).isFile())
+            return withExe;
+#endif
+    }
+
+    return program;
+}
+
+QString safeFileName(const QString& name)
+{
+    QString out = name;
+    static const QRegularExpression bad(QStringLiteral("[\\\\/:*?\"<>|\\s]+"));
+    out.replace(bad, QStringLiteral("_"));
+    return out.isEmpty() ? QStringLiteral("target") : out;
+}
+
+QByteArray signatureOf(const QStringList& args)
+{
+    return QCryptographicHash::hash(args.join(QLatin1Char('\x1f')).toUtf8(),
+                                    QCryptographicHash::Sha1)
+        .toHex();
 }
 
 } // namespace
@@ -101,8 +177,15 @@ QString BuildEngine::outputDir() const
 QString BuildEngine::axfPath() const
 {
     const Target* t = currentTarget();
-    const QString name = t && !t->outputName.isEmpty() ? t->outputName : QStringLiteral("Project");
+    const QString name = t ? t->artifactName() : QStringLiteral("Project");
     return outputDir() + QLatin1Char('/') + name + QStringLiteral(".axf");
+}
+
+QString BuildEngine::libPath() const
+{
+    const Target* t = currentTarget();
+    const QString name = t ? t->artifactName() : QStringLiteral("Project");
+    return outputDir() + QLatin1Char('/') + name + QStringLiteral(".lib");
 }
 
 QString BuildEngine::cpuName() const
@@ -111,15 +194,58 @@ QString BuildEngine::cpuName() const
     return t ? t->displayCpu() : QStringLiteral("Cortex-M3");
 }
 
+// ---------------------------------------------------------------- 选项合并
+
+QStringList BuildEngine::targetIncludeDirs() const
+{
+    const Target* t = currentTarget();
+    if (!t)
+        return QStringList();
+
+    QStringList out;
+    for (const QString& inc : splitOptionList(t->includePaths))
+        out << toAbsolute(projectDir(), inc);
+    return out;
+}
+
+QStringList BuildEngine::mergeIncludeDirs(const ProjGroup& group, const ProjFile& file) const
+{
+    QStringList out = targetIncludeDirs();
+
+    if (group.hasOwnOptions) {
+        for (const QString& inc : splitOptionList(group.includePaths))
+            out << toAbsolute(projectDir(), inc);
+    }
+    if (file.hasOwnOptions) {
+        for (const QString& inc : splitOptionList(file.includePaths))
+            out << toAbsolute(projectDir(), inc);
+    }
+    out.removeDuplicates();
+    return out;
+}
+
+QStringList BuildEngine::mergeDefines(const ProjGroup& group, const ProjFile& file) const
+{
+    const Target* t = currentTarget();
+    QStringList out = t ? splitOptionList(t->defines) : QStringList();
+    if (group.hasOwnOptions)
+        out += splitOptionList(group.defines);
+    if (file.hasOwnOptions)
+        out += splitOptionList(file.defines);
+    out.removeDuplicates();
+    return out;
+}
+
 // ---------------------------------------------------------------- 参数构造
 
-QStringList BuildEngine::compileArgs(const ProjFile& file, const QString& sourcePath,
-                                     const QString& objectPath) const
+QStringList BuildEngine::compileArgs(const ProjGroup& group, const ProjFile& file,
+                                     const QString& sourcePath, const QString& objectPath) const
 {
     const Target* t = currentTarget();
     QStringList a;
 
     const FileKind kind = file.kind();
+    const bool isC = (kind == FileKind::CSource);
 
     if (m_toolchain.family == QLatin1String("AC6")) {
         a << QStringLiteral("--target=arm-arm-none-eabi");
@@ -133,10 +259,14 @@ QStringList BuildEngine::compileArgs(const ProjFile& file, const QString& source
         a << QStringLiteral("-c");
     } else {
         a << QStringLiteral("--cpu") << cpuName();
-        if (kind == FileKind::CSource && !(t && t->c99))
-            a << QStringLiteral("--c90");
-        if (kind == FileKind::CSource && t && t->c99)
-            a << QStringLiteral("--c99");
+        if (isC) {
+            if (t && t->c99)
+                a << QStringLiteral("--c99");
+            else
+                a << QStringLiteral("--c90");
+        }
+        if (t && t->gnuExtensions)
+            a << QStringLiteral("--gnu");
         if (t && t->debugInformation)
             a << QStringLiteral("-g");
         a << (QStringLiteral("-O") + QString::number(t ? t->optimization : 1));
@@ -159,24 +289,16 @@ QStringList BuildEngine::compileArgs(const ProjFile& file, const QString& source
         a << QStringLiteral("-c");
     }
 
-    // 宏定义
-    QStringList defines = splitOptionList(t ? t->defines : QString());
-    if (file.hasOwnOptions)
-        defines += splitOptionList(file.defines);
-    for (const QString& d : defines)
+    for (const QString& d : mergeDefines(group, file))
         a << (QStringLiteral("-D") + d);
 
-    // 头文件路径
-    QStringList incs = splitOptionList(t ? t->includePaths : QString());
-    if (file.hasOwnOptions)
-        incs += splitOptionList(file.includePaths);
-    for (const QString& inc : incs) {
-        const QString abs = toAbsolute(projectDir(), inc);
-        a << (QStringLiteral("-I") + native(abs));
-    }
+    for (const QString& inc : mergeIncludeDirs(group, file))
+        a << (QStringLiteral("-I") + native(inc));
 
     if (t && !t->miscControls.trimmed().isEmpty())
         a << splitArgsLoose(t->miscControls);
+    if (group.hasOwnOptions && !group.misc.trimmed().isEmpty())
+        a << splitArgsLoose(group.misc);
     if (file.hasOwnOptions && !file.misc.trimmed().isEmpty())
         a << splitArgsLoose(file.misc);
 
@@ -185,8 +307,8 @@ QStringList BuildEngine::compileArgs(const ProjFile& file, const QString& source
     return a;
 }
 
-QStringList BuildEngine::assembleArgs(const ProjFile& file, const QString& sourcePath,
-                                      const QString& objectPath) const
+QStringList BuildEngine::assembleArgs(const ProjGroup& group, const ProjFile& file,
+                                      const QString& sourcePath, const QString& objectPath) const
 {
     const Target* t = currentTarget();
     QStringList a;
@@ -195,9 +317,12 @@ QStringList BuildEngine::assembleArgs(const ProjFile& file, const QString& sourc
     if (t && t->debugInformation)
         a << QStringLiteral("-g");
 
-    QStringList defines = splitOptionList(t ? t->asmDefines : QString());
+    QStringList defines = t ? splitOptionList(t->asmDefines) : QStringList();
+    if (group.hasOwnOptions)
+        defines += splitOptionList(group.defines);
     if (file.hasOwnOptions)
         defines += splitOptionList(file.defines);
+
     for (const QString& d : defines) {
         const int eq = d.indexOf(QLatin1Char('='));
         if (eq > 0)
@@ -206,14 +331,13 @@ QStringList BuildEngine::assembleArgs(const ProjFile& file, const QString& sourc
             a << QStringLiteral("--pd") << (d + QStringLiteral(" SETA 1"));
     }
 
-    QStringList incs = splitOptionList(t ? t->asmIncludePaths : QString());
-    if (file.hasOwnOptions)
-        incs += splitOptionList(file.includePaths);
-    for (const QString& inc : incs)
-        a << (QStringLiteral("-I") + native(toAbsolute(projectDir(), inc)));
+    for (const QString& inc : mergeIncludeDirs(group, file))
+        a << (QStringLiteral("-I") + native(inc));
 
     if (t && !t->asmMisc.trimmed().isEmpty())
         a << splitArgsLoose(t->asmMisc);
+    if (group.hasOwnOptions && !group.misc.trimmed().isEmpty())
+        a << splitArgsLoose(group.misc);
 
     a << QStringLiteral("-o") << native(objectPath);
     a << native(sourcePath);
@@ -257,6 +381,139 @@ QStringList BuildEngine::linkArgs(const QStringList& objects) const
     return a;
 }
 
+QStringList BuildEngine::libArgs(const QStringList& objects) const
+{
+    QStringList a;
+    a << QStringLiteral("--create") << native(libPath());
+    a << objects;
+    return a;
+}
+
+// ---------------------------------------------------------------- 依赖扫描
+
+QStringList BuildEngine::scanDependencies(const QString& sourcePath,
+                                          const QStringList& includeDirs) const
+{
+    static const QRegularExpression includeRe(
+        QStringLiteral("^\\s*#\\s*include\\s*[<\"]([^>\"\\r\\n]+)[>\"]"));
+
+    QStringList result;
+    QSet<QString> visited;
+    QStringList queue;
+    queue << QDir::cleanPath(sourcePath);
+
+    while (!queue.isEmpty() && visited.size() < 2000) {
+        const QString current = queue.takeFirst();
+        if (visited.contains(current))
+            continue;
+        visited.insert(current);
+
+        QFile f(current);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            continue;
+
+        QTextStream ts(&f);
+        int guard = 0;
+        while (!ts.atEnd() && guard++ < 200000) {
+            const QString line = ts.readLine();
+            const QRegularExpressionMatch m = includeRe.match(line);
+            if (!m.hasMatch())
+                continue;
+
+            const QString name = m.captured(1).trimmed();
+            QString found;
+
+            // 1) 与当前文件同目录
+            const QString local = QDir::cleanPath(QFileInfo(current).absolutePath()
+                                                  + QLatin1Char('/') + name);
+            if (QFileInfo::exists(local)) {
+                found = local;
+            } else {
+                // 2) -I 目录
+                for (const QString& dir : includeDirs) {
+                    const QString cand = QDir::cleanPath(dir + QLatin1Char('/') + name);
+                    if (QFileInfo::exists(cand)) {
+                        found = cand;
+                        break;
+                    }
+                }
+            }
+
+            if (found.isEmpty() || visited.contains(found))
+                continue;
+
+            result << found;
+            queue << found;
+        }
+        f.close();
+    }
+
+    return result;
+}
+
+bool BuildEngine::isUpToDate(const QString& source, const QString& object,
+                             const QByteArray& signature, const QStringList& includeDirs) const
+{
+    const QFileInfo objectInfo(object);
+    if (!objectInfo.exists())
+        return false;
+
+    // 编译选项变了（包括切 Target 导致 include/define 变化）就必须重编
+    if (m_signatures.value(object) != QString::fromLatin1(signature))
+        return false;
+
+    const QDateTime objectTime = objectInfo.lastModified();
+    if (QFileInfo(source).lastModified() > objectTime)
+        return false;
+
+    const QStringList deps = scanDependencies(source, includeDirs);
+    for (const QString& dep : deps) {
+        if (QFileInfo(dep).lastModified() > objectTime)
+            return false;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------- 签名文件
+
+QHash<QString, QString> BuildEngine::loadSignatures() const
+{
+    QHash<QString, QString> out;
+    if (m_signaturePath.isEmpty())
+        return out;
+
+    QFile f(m_signaturePath);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+        return out;
+
+    QTextStream ts(&f);
+    while (!ts.atEnd()) {
+        const QString line = ts.readLine();
+        const int sp = line.indexOf(QLatin1Char('\t'));
+        if (sp <= 0)
+            continue;
+        out.insert(line.mid(sp + 1), line.left(sp));
+    }
+    return out;
+}
+
+void BuildEngine::saveSignatures() const
+{
+    if (m_signaturePath.isEmpty() || !m_signaturesDirty)
+        return;
+
+    QDir().mkpath(QFileInfo(m_signaturePath).absolutePath());
+
+    QFile f(m_signaturePath);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+        return;
+
+    QTextStream ts(&f);
+    for (auto it = m_signatures.constBegin(); it != m_signatures.constEnd(); ++it)
+        ts << it.value() << QLatin1Char('\t') << it.key() << QLatin1Char('\n');
+    f.close();
+}
+
 // ---------------------------------------------------------------- 流程
 
 void BuildEngine::resetRun(Mode mode)
@@ -270,11 +527,32 @@ void BuildEngine::resetRun(Mode mode)
     m_running = true;
     m_timer.start();
     m_axfForSize.clear();
+    m_signaturesDirty = false;
 }
 
 void BuildEngine::enqueue(const Job& job)
 {
     m_jobs.append(job);
+}
+
+void BuildEngine::enqueueHook(const UserProgram& program, bool skipIfErrors)
+{
+    if (!program.enabled || program.command.trimmed().isEmpty())
+        return;
+
+    const QStringList parts = splitCommandLine(program.command);
+    if (parts.isEmpty())
+        return;
+
+    Job job;
+    job.program = parts.first();
+    job.args = parts.mid(1);
+    job.title = QStringLiteral("*** Executing: %1").arg(program.command.trimmed());
+    job.skipIfErrors = skipIfErrors;
+    job.isHook = true;
+    job.hookStopsOnError = program.stopOnExitCode;
+    job.hookCommand = program.command.trimmed();
+    enqueue(job);
 }
 
 void BuildEngine::build(bool rebuildAll)
@@ -290,7 +568,7 @@ void BuildEngine::build(bool rebuildAll)
 
     if (!m_toolchain.isValid()) {
         emit output(QStringLiteral("*** Error: 尚未配置 ARM 编译器路径"));
-        emit output(QStringLiteral("*** 请到  Project -> Options for Target -> Tools，或菜单 Tools -> Configure Toolchain 选择 armcc.exe 所在目录"));
+        emit output(QStringLiteral("*** 请到 Tools -> Configure Toolchain 选择 armcc.exe 所在目录"));
         emit finished(false, 0, 0);
         return;
     }
@@ -322,12 +600,14 @@ void BuildEngine::clean()
 
     resetRun(Mode::Clean);
     prepareClean();
-    finishRun(true);
+    m_running = false;
+    emit finished(m_errors == 0, m_errors, m_warnings);
 }
 
 void BuildEngine::prepareBuild(bool rebuildAll)
 {
     const Target* t = currentTarget();
+
     emit output(QStringLiteral("Build started: Project: %1, Configuration: %2")
                     .arg(m_project.baseName(), t->name));
 
@@ -340,25 +620,50 @@ void BuildEngine::prepareBuild(bool rebuildAll)
 
     QDir().mkpath(outputDir());
 
+    const QString sigDir = outputDir() + QStringLiteral("/.mdk-ose");
+    QDir().mkpath(sigDir);
+    m_signaturePath = sigDir + QLatin1Char('/') + safeFileName(t->name) + QStringLiteral(".sig");
+    m_signatures = loadSignatures();
+
+    for (const UserProgram& p : t->beforeCompile)
+        enqueueHook(p, false);
+
+    const bool makeLibrary = t->createLib && !t->createExecutable;
+
     QStringList objects;
     QSet<QString> usedNames;
     int compiled = 0;
     int total = 0;
 
     for (const ProjGroup& g : t->groups) {
+        if (g.excluded)
+            continue;
+
         for (const ProjFile& f : g.files) {
             const FileKind kind = f.kind();
             const QString src = toAbsolute(projectDir(), f.path);
 
             if (kind == FileKind::Object || kind == FileKind::Library) {
-                objects << native(src);
+                if (!f.excluded)
+                    objects << native(src);
                 continue;
             }
+
             if (kind != FileKind::CSource && kind != FileKind::CppSource
                 && kind != FileKind::Assembly)
                 continue;
 
+            if (f.excluded)
+                continue;
+
             ++total;
+
+            if (!QFileInfo::exists(src)) {
+                emit output(QStringLiteral("*** Error: 找不到源文件 \"%1\"").arg(native(src)));
+                ++m_errors;
+                ++m_jobErrorDiagnostics;
+                continue;
+            }
 
             QString base = QFileInfo(src).completeBaseName();
             if (usedNames.contains(base)) {
@@ -372,55 +677,79 @@ void BuildEngine::prepareBuild(bool rebuildAll)
             const QString obj = outputDir() + QLatin1Char('/') + base + QStringLiteral(".o");
             objects << native(obj);
 
-            if (f.excluded)
-                continue;
+            Job job;
+            if (kind == FileKind::Assembly) {
+                job.program = m_toolchain.as;
+                job.args = assembleArgs(g, f, src, obj);
+                job.title = QStringLiteral("assembling %1...").arg(QFileInfo(src).fileName());
+            } else {
+                job.program = m_toolchain.cc;
+                job.args = compileArgs(g, f, src, obj);
+                job.title = QStringLiteral("compiling %1...").arg(QFileInfo(src).fileName());
+            }
 
-            const bool upToDate = !rebuildAll && QFileInfo::exists(obj)
-                                  && QFileInfo(obj).lastModified() >= QFileInfo(src).lastModified();
+            if (job.program.isEmpty()) {
+                emit output(QStringLiteral("*** Error: 找不到 armcc / armasm，请检查编译器路径"));
+                ++m_errors;
+                return;
+            }
+
+            const QByteArray signature = signatureOf(job.args);
+            const bool upToDate =
+                !rebuildAll && isUpToDate(src, obj, signature, mergeIncludeDirs(g, f));
+
+            m_signatures.insert(obj, QString::fromLatin1(signature));
+            m_signaturesDirty = true;
+
             if (upToDate)
                 continue;
 
             ++compiled;
-
-            Job job;
-            if (kind == FileKind::Assembly) {
-                job.program = m_toolchain.as;
-                job.args = assembleArgs(f, src, obj);
-                job.title = QStringLiteral("assembling %1...").arg(QFileInfo(src).fileName());
-            } else {
-                job.program = m_toolchain.cc;
-                job.args = compileArgs(f, src, obj);
-                job.title = QStringLiteral("compiling %1...").arg(QFileInfo(src).fileName());
-            }
-            if (job.program.isEmpty()) {
-                emit output(QStringLiteral("*** Error: 找不到 armcc / armasm，请检查编译器路径"));
-                m_errors++;
-                return;
-            }
-            job.skipIfErrors = false;
             enqueue(job);
         }
     }
 
+    if (total == 0)
+        emit output(QStringLiteral("*** Warning: 这个 Target 没有任何参与编译的源文件"));
+
     if (compiled == 0 && total > 0)
         emit output(QStringLiteral("Target is up to date."));
 
-    Job link;
-    link.program = m_toolchain.ld;
-    link.args = linkArgs(objects);
-    link.title = QStringLiteral("linking...");
-    link.skipIfErrors = true;
-    link.isLink = true;
-    enqueue(link);
+    saveSignatures();
 
-    if (t->createHexFile) {
+    if (objects.isEmpty()) {
+        emit output(QStringLiteral("*** Error: 没有可链接的目标文件"));
+        ++m_errors;
+        return;
+    }
+
+    for (const UserProgram& p : t->beforeMake)
+        enqueueHook(p, true);
+
+    if (makeLibrary) {
+        Job lib;
+        lib.program = m_toolchain.ar;
+        lib.args = libArgs(objects);
+        lib.title = QStringLiteral("creating library...");
+        lib.skipIfErrors = true;
+        lib.isLink = true;
+        enqueue(lib);
+    } else {
+        Job link;
+        link.program = m_toolchain.ld;
+        link.args = linkArgs(objects);
+        link.title = QStringLiteral("linking...");
+        link.skipIfErrors = true;
+        link.isLink = true;
+        enqueue(link);
+    }
+
+    if (!makeLibrary && t->createHexFile && !m_toolchain.from.isEmpty()) {
         Job hex;
         hex.program = m_toolchain.from;
         hex.args = QStringList{ QStringLiteral("--i32"),
                                 QStringLiteral("--output=") + native(outputDir() + QLatin1Char('/')
-                                                                     + (t->outputName.isEmpty()
-                                                                            ? QStringLiteral("Project")
-                                                                            : t->outputName)
+                                                                     + t->artifactName()
                                                                      + QStringLiteral(".hex")),
                                 native(axfPath()) };
         hex.title = QStringLiteral("creating hex file...");
@@ -428,7 +757,10 @@ void BuildEngine::prepareBuild(bool rebuildAll)
         enqueue(hex);
     }
 
-    m_axfForSize = axfPath();
+    for (const UserProgram& p : t->afterMake)
+        enqueueHook(p, true);
+
+    m_axfForSize = makeLibrary ? QString() : axfPath();
 }
 
 void BuildEngine::prepareTranslate(const QString& absoluteFilePath)
@@ -444,22 +776,22 @@ void BuildEngine::prepareTranslate(const QString& absoluteFilePath)
 
     QDir().mkpath(outputDir());
 
+    ProjGroup group;
     ProjFile file;
     file.name = QFileInfo(absoluteFilePath).fileName();
     file.path = absoluteFilePath;
 
-    QString base = QFileInfo(absoluteFilePath).completeBaseName();
+    const QString base = QFileInfo(absoluteFilePath).completeBaseName();
     const QString obj = outputDir() + QLatin1Char('/') + base + QStringLiteral(".o");
 
     Job job;
-    const FileKind kind = fileKindFromPath(absoluteFilePath);
-    if (kind == FileKind::Assembly) {
+    if (fileKindFromPath(absoluteFilePath) == FileKind::Assembly) {
         job.program = m_toolchain.as;
-        job.args = assembleArgs(file, absoluteFilePath, obj);
+        job.args = assembleArgs(group, file, absoluteFilePath, obj);
         job.title = QStringLiteral("assembling %1...").arg(QFileInfo(absoluteFilePath).fileName());
     } else {
         job.program = m_toolchain.cc;
-        job.args = compileArgs(file, absoluteFilePath, obj);
+        job.args = compileArgs(group, file, absoluteFilePath, obj);
         job.title = QStringLiteral("compiling %1...").arg(QFileInfo(absoluteFilePath).fileName());
     }
     enqueue(job);
@@ -474,16 +806,21 @@ void BuildEngine::prepareClean()
     QDir dir(outputDir());
     if (dir.exists()) {
         const QStringList filters{ QStringLiteral("*.o"), QStringLiteral("*.axf"),
-                                   QStringLiteral("*.hex"), QStringLiteral("*.bin"),
-                                   QStringLiteral("*.map"), QStringLiteral("*.lst"),
-                                   QStringLiteral("*.crf"), QStringLiteral("*.d"),
-                                   QStringLiteral("*.lnp") };
+                                   QStringLiteral("*.lib"), QStringLiteral("*.hex"),
+                                   QStringLiteral("*.bin"), QStringLiteral("*.map"),
+                                   QStringLiteral("*.lst"), QStringLiteral("*.crf"),
+                                   QStringLiteral("*.d"), QStringLiteral("*.lnp") };
         const QFileInfoList entries = dir.entryInfoList(filters, QDir::Files);
         for (const QFileInfo& fi : entries) {
             emit output(QStringLiteral("\".\\%1\" - Deleted.").arg(fi.fileName()));
             QFile::remove(fi.absoluteFilePath());
         }
     }
+
+    // 顺手清掉增量签名，保证下次一定全量
+    const QString sigDir = outputDir() + QStringLiteral("/.mdk-ose");
+    QDir(sigDir).removeRecursively();
+
     emit output(QStringLiteral("Clean finished."));
 }
 
@@ -507,7 +844,7 @@ void BuildEngine::startNext()
             emit output(job.title);
 
         if (job.program.isEmpty()) {
-            emit output(QStringLiteral("*** Error: 编译器程序路径为空"));
+            emit output(QStringLiteral("*** Error: 程序路径为空（armlink / armar / 用户命令？）"));
             ++m_errors;
             continue;
         }
@@ -515,10 +852,33 @@ void BuildEngine::startNext()
         m_proc = new QProcess(this);
         m_proc->setWorkingDirectory(projectDir());
         m_proc->setProcessChannelMode(QProcess::MergedChannels);
-        m_proc->setProgram(job.program);
+        m_proc->setProgram(resolveProgram(job.program, m_toolchain.binDir));
         m_proc->setArguments(job.args);
 
+        // 让 fromelf.exe 之类能在 PATH 里找到
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        if (!m_toolchain.binDir.isEmpty()) {
+            const QString path = env.value(QStringLiteral("PATH"));
+            env.insert(QStringLiteral("PATH"),
+                       m_toolchain.binDir + QDir::listSeparator() + path);
+        }
+        m_proc->setProcessEnvironment(env);
+
         m_jobErrorDiagnostics = 0;
+
+        // 程序不存在时 QProcess 只发 errorOccurred，不发 finished，
+        // 不处理就会把整个任务队列卡死。
+        connect(m_proc, &QProcess::errorOccurred, this,
+                [this, job](QProcess::ProcessError e) {
+                    if (e != QProcess::FailedToStart || !m_proc)
+                        return;
+                    emit output(QStringLiteral("*** Error: 无法启动 \"%1\"（找不到可执行文件？）")
+                                    .arg(job.program));
+                    ++m_errors;
+                    m_proc->deleteLater();
+                    m_proc = nullptr;
+                    startNext();
+                });
 
         connect(m_proc, &QProcess::readyRead, this, &BuildEngine::pumpOutput);
         connect(m_proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
@@ -534,12 +894,25 @@ void BuildEngine::startNext()
 
                     const bool ok = (status == QProcess::NormalExit && code == 0);
                     if (!ok) {
-                        // 编译器已经打印过 Error 行时不要重复计数，否则 Error(s) 会翻倍
-                        if (m_jobErrorDiagnostics == 0)
-                            ++m_errors;
-                        if (job.isLink)
-                            emit output(QStringLiteral("*** 链接失败"));
-                    } else if (job.isLink && !m_axfForSize.isEmpty() && QFileInfo::exists(m_axfForSize)) {
+                        if (job.isHook) {
+                            if (job.hookStopsOnError) {
+                                ++m_errors;
+                                emit output(QStringLiteral("*** 用户命令失败: %1")
+                                                .arg(job.hookCommand));
+                            } else {
+                                ++m_warnings;
+                                emit output(QStringLiteral("*** 用户命令返回 %1（已忽略）: %2")
+                                                .arg(code).arg(job.hookCommand));
+                            }
+                        } else {
+                            // 编译器自己打过 Error 行时不要重复计数
+                            if (m_jobErrorDiagnostics == 0)
+                                ++m_errors;
+                            if (job.isLink)
+                                emit output(QStringLiteral("*** 链接失败"));
+                        }
+                    } else if (job.isLink && !m_axfForSize.isEmpty()
+                               && QFileInfo::exists(m_axfForSize)) {
                         emitProgramSize();
                     }
 
@@ -592,9 +965,9 @@ void BuildEngine::handleLine(const QString& line)
         if (d.severity == Severity::Error) {
             ++m_errors;
             ++m_jobErrorDiagnostics;
-        }
-        else if (d.severity == Severity::Warning)
+        } else if (d.severity == Severity::Warning) {
             ++m_warnings;
+        }
         emit diagnostic(d);
     }
 }
@@ -610,8 +983,7 @@ void BuildEngine::emitProgramSize()
 
     // armlink 的 map 里，Totals 行是：
     //    Code (inc. data)  RO Data  RW Data  ZI Data  Debug   Grand Totals
-    // 也就是 6 列：Code、其中内联的 data、RO、RW、ZI、Debug。
-    // 某些版本只给 5 列（没有 inc. data），所以要按列数分别解释。
+    // 也就是 6 列；某些版本只给 5 列，所以要按列数分别解释。
     static const QRegularExpression totalsRe(
         QStringLiteral("^\\s*(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s*(\\d+)?\\s*"
                        "(?:Object|Library|Grand)\\s+Totals.*$"));
@@ -639,7 +1011,6 @@ void BuildEngine::emitProgramSize()
         }
         found = true;
 
-        // "Grand Totals" 是最全的一行，遇到就可以收工
         if (line.contains(QLatin1String("Grand Totals")))
             break;
     }
@@ -658,21 +1029,24 @@ void BuildEngine::finishRun(bool success)
         return;
 
     m_running = false;
+    saveSignatures();
 
     if (m_mode == Mode::Build || m_mode == Mode::Translate) {
         const Target* t = currentTarget();
-        const QString name = (t && !t->outputName.isEmpty()) ? t->outputName
-                                                             : QStringLiteral("Project");
-        QString axf = QStringLiteral(".\\Objects\\") + name + QStringLiteral(".axf");
-        if (t && !t->outputDirectory.isEmpty()) {
-            QString dir = t->outputDirectory;
-            dir.replace(QLatin1Char('/'), QLatin1Char('\\'));
-            if (!dir.endsWith(QLatin1Char('\\')))
-                dir += QLatin1Char('\\');
-            axf = dir + name + QStringLiteral(".axf");
-        }
+        const QString name = t ? t->artifactName() : QStringLiteral("Project");
+        const bool makeLibrary = t && t->createLib && !t->createExecutable;
+
+        QString dir = (t && !t->outputDirectory.isEmpty()) ? t->outputDirectory
+                                                           : QStringLiteral(".\\Objects\\");
+        dir.replace(QLatin1Char('/'), QLatin1Char('\\'));
+        if (!dir.endsWith(QLatin1Char('\\')))
+            dir += QLatin1Char('\\');
+
+        const QString artifact =
+            dir + name + (makeLibrary ? QStringLiteral(".lib") : QStringLiteral(".axf"));
+
         emit output(QStringLiteral("\"%1\" - %2 Error(s), %3 Warning(s).")
-                        .arg(axf).arg(m_errors).arg(m_warnings));
+                        .arg(artifact).arg(m_errors).arg(m_warnings));
         emit output(QStringLiteral("Build Time Elapsed:  %1")
                         .arg(formatElapsed(m_timer.elapsed())));
     }
@@ -680,16 +1054,11 @@ void BuildEngine::finishRun(bool success)
     emit finished(success && m_errors == 0, m_errors, m_warnings);
 }
 
-void BuildEngine::onProcessFinished(int, int)
-{
-}
-
 void BuildEngine::cancel()
 {
     m_cancelled = true;
     m_jobs.clear();
-    if (m_proc) {
+    if (m_proc)
         m_proc->kill();
-    }
     emit output(QStringLiteral("*** 构建已取消"));
 }

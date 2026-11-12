@@ -33,6 +33,32 @@ bool childFlag(const QDomElement& parent, const QString& tag, bool def)
     return t == QLatin1String("1") || t.compare(QLatin1String("true"), Qt::CaseInsensitive) == 0;
 }
 
+// <BeforeMake><RunUserProg1>1</RunUserProg1><UserProg1Name>...</UserProg1Name>
+//              <nStopB1X>0</nStopB1X> ...
+QList<UserProgram> readUserPrograms(const QDomElement& el, const QString& stopTagPrefix)
+{
+    QList<UserProgram> out;
+    if (el.isNull())
+        return out;
+
+    for (int i = 1; i <= 2; ++i) {
+        const QString runTag = QStringLiteral("RunUserProg%1").arg(i);
+        const QString nameTag = QStringLiteral("UserProg%1Name").arg(i);
+        const QString stopTag = QStringLiteral("%1%2X").arg(stopTagPrefix).arg(i);
+
+        const QString cmd = childText(el, nameTag);
+        if (cmd.isEmpty())
+            continue;
+
+        UserProgram p;
+        p.command = cmd;
+        p.enabled = childFlag(el, runTag, false);
+        p.stopOnExitCode = childText(el, stopTag) != QLatin1String("0");
+        out.append(p);
+    }
+    return out;
+}
+
 QDomElement ensureChild(QDomDocument& doc, QDomElement parent, const QString& tag)
 {
     QDomElement e = parent.firstChildElement(tag);
@@ -79,17 +105,23 @@ bool load(const QString& path, UvProject& out, QString* error)
         return false;
     }
 
+    QByteArray raw = file.readAll();
+    file.close();
+
+    // Keil 有时会写出 UTF-8 BOM，QDomDocument 遇到会直接解析失败
+    if (raw.startsWith("\xEF\xBB\xBF"))
+        raw.remove(0, 3);
+
     QDomDocument doc;
     QString parseError;
     int line = 0;
     int column = 0;
-    if (!doc.setContent(&file, &parseError, &line, &column)) {
+    if (!doc.setContent(raw, &parseError, &line, &column)) {
         if (error)
             *error = QStringLiteral("工程文件解析失败 (%1:%2): %3")
                          .arg(line).arg(column).arg(parseError);
         return false;
     }
-    file.close();
 
     const QDomElement root = doc.documentElement();
     if (root.tagName() != QLatin1String("Project")) {
@@ -148,6 +180,7 @@ bool load(const QString& path, UvProject& out, QString* error)
         t.enumIsInt = childFlag(cads, QStringLiteral("EnumInt"), false);
         t.plainChar = childFlag(cads, QStringLiteral("PlainCh"), false);
         t.c99 = childFlag(cads, QStringLiteral("uC99"), false);
+        t.gnuExtensions = childFlag(cads, QStringLiteral("uGnu"), false);
         t.cpp11 = childFlag(cads, QStringLiteral("uCpp11"), false);
         t.warningLevel = childInt(cads, QStringLiteral("wLevel"), 2);
         t.noWarnings = (t.warningLevel == 0);
@@ -175,6 +208,14 @@ bool load(const QString& path, UvProject& out, QString* error)
         // 其它
         t.useMicrolib = childFlag(misc, QStringLiteral("useUlib"), false);
 
+        // 构建前后用户命令（uVision 的 Before/After 选项卡）
+        t.beforeCompile = readUserPrograms(
+            common.firstChildElement(QStringLiteral("BeforeCompile")), QStringLiteral("nStopU"));
+        t.beforeMake = readUserPrograms(
+            common.firstChildElement(QStringLiteral("BeforeMake")), QStringLiteral("nStopB"));
+        t.afterMake = readUserPrograms(
+            common.firstChildElement(QStringLiteral("AfterMake")), QStringLiteral("nStopA"));
+
         // Groups
         const QDomElement groupsEl = tEl.firstChildElement(QStringLiteral("Groups"));
         for (QDomElement gEl = groupsEl.firstChildElement(QStringLiteral("Group"));
@@ -184,9 +225,25 @@ bool load(const QString& path, UvProject& out, QString* error)
             group.name = childText(gEl, QStringLiteral("GroupName"), QStringLiteral("Group"));
 
             const QDomElement gOption = gEl.firstChildElement(QStringLiteral("GroupOption"));
-            const bool groupInBuild =
-                childFlag(gOption.firstChildElement(QStringLiteral("CommonProperty")),
-                          QStringLiteral("IncludeInBuild"), true);
+            group.excluded =
+                !childFlag(gOption.firstChildElement(QStringLiteral("CommonProperty")),
+                           QStringLiteral("IncludeInBuild"), true);
+
+            // 组级编译选项（GroupOption/GroupArmAds/Cads/VariousControls），
+            // 优先级低于文件级、高于 Target 级
+            const QDomElement gAds = gOption.firstChildElement(QStringLiteral("GroupArmAds"));
+            const QDomElement gVarious =
+                gAds.firstChildElement(QStringLiteral("Cads"))
+                    .firstChildElement(QStringLiteral("VariousControls"));
+            if (!gVarious.isNull()) {
+                group.defines = childText(gVarious, QStringLiteral("Define"));
+                group.includePaths = childText(gVarious, QStringLiteral("IncludePath"));
+                group.misc = childText(gVarious, QStringLiteral("MiscControls"));
+                group.hasOwnOptions = !group.defines.isEmpty() || !group.includePaths.isEmpty()
+                                      || !group.misc.isEmpty();
+            }
+
+            const bool groupInBuild = !group.excluded;
 
             const QDomElement filesEl = gEl.firstChildElement(QStringLiteral("Files"));
             for (QDomElement fEl = filesEl.firstChildElement(QStringLiteral("File"));

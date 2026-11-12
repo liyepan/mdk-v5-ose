@@ -45,9 +45,9 @@ CodeEditor::CodeEditor(QWidget* parent)
 {
     m_lineNumberArea = new LineNumberArea(this);
 
-    setFont(KeilStyle::editorFont());
+    m_pointSize = KeilStyle::editorFont().pointSizeF();
+    applyFont();
     setLineWrapMode(QPlainTextEdit::NoWrap);
-    setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) * 4);
     setWordWrapMode(QTextOption::NoWrap);
 
     connect(this, &CodeEditor::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
@@ -62,6 +62,38 @@ CodeEditor::CodeEditor(QWidget* parent)
 void CodeEditor::setupContextMenu()
 {
     setContextMenuPolicy(Qt::DefaultContextMenu);
+}
+
+void CodeEditor::applyFont()
+{
+    QFont f = KeilStyle::editorFont();
+    f.setPointSizeF(m_pointSize);
+    setFont(f);
+    setTabStopDistance(QFontMetricsF(f).horizontalAdvance(QLatin1Char(' ')) * 4);
+    updateLineNumberAreaWidth(0);
+}
+
+void CodeEditor::setZoomPointSize(qreal pointSize)
+{
+    const qreal clamped = qBound(6.0, pointSize, 48.0);
+    if (qFuzzyCompare(clamped, m_pointSize))
+        return;
+
+    m_pointSize = clamped;
+    applyFont();
+    highlightCurrentLine();
+}
+
+void CodeEditor::wheelEvent(QWheelEvent* event)
+{
+    if (event->modifiers() & Qt::ControlModifier) {
+        const int steps = event->angleDelta().y() / 120;
+        if (steps != 0)
+            emit zoomRequested(steps);
+        event->accept();
+        return;
+    }
+    QPlainTextEdit::wheelEvent(event);
 }
 
 void CodeEditor::setHighlightAssembly(bool assembly)

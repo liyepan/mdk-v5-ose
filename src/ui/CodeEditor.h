@@ -22,14 +22,20 @@ public:
     void gotoLine(int line, int column = 1);
     void setHighlightAssembly(bool assembly);
 
+    // 字号缩放（高 DPI 屏上真正管用的那个"缩放"）
+    void  setZoomPointSize(qreal pointSize);
+    qreal zoomPointSize() const { return m_pointSize; }
+
     int  lineNumberAreaWidth() const;
     void lineNumberAreaPaintEvent(QPaintEvent* event);
 
 signals:
     void cursorPositionChanged(int line, int column);
+    void zoomRequested(int delta);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
 
 private slots:
     void updateLineNumberAreaWidth(int newBlockCount);
@@ -39,8 +45,10 @@ private slots:
 
 private:
     void setupContextMenu();
+    void applyFont();
 
     LineNumberArea* m_lineNumberArea = nullptr;
+    qreal           m_pointSize = 0.0;
     QString         m_filePath;
     bool            m_assembly = false;
 };

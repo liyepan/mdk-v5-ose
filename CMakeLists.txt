@@ -67,4 +67,8 @@ endif()
 if(WIN32)
     # 让 exe 使用 Windows 子系统，避免弹出控制台窗口
     set_target_properties(mdk-v5-ose PROPERTIES WIN32_EXECUTABLE TRUE)
+
+    # 资源文件里带 PerMonitorV2 的 DPI 清单
+    enable_language(RC)
+    target_sources(mdk-v5-ose PRIVATE resources/app.rc)
 endif()
