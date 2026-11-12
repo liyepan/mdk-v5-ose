@@ -86,6 +86,7 @@ private:
     void resetEditorZoom();
 
     QColor nextTabColor();
+    void revealBuildOutput();
     void formatEditor(CodeEditor* editor);
     bool saveEditor(CodeEditor* editor);
     void ensureSymbolIndex();

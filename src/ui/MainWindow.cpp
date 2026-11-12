@@ -828,6 +828,13 @@ void MainWindow::onTabCloseRequested(int index)
         editor->deleteLater();
 }
 
+void MainWindow::revealBuildOutput()
+{
+    // 构建/清理一触发就把输出窗口顶出来，哪怕上一次被手动关掉过
+    m_outputDock->show();
+    m_outputDock->raise();
+}
+
 QColor MainWindow::nextTabColor()
 {
     static const QColor palette[] = {
@@ -1163,6 +1170,7 @@ void MainWindow::onBuild()
     if (!ensureToolchain())
         return;
 
+    revealBuildOutput();
     m_buildOutput->clear();
     m_buildOutput->clearDiagnostics();
     setBusy(true);
@@ -1179,6 +1187,7 @@ void MainWindow::onRebuild()
     if (!ensureToolchain())
         return;
 
+    revealBuildOutput();
     m_buildOutput->clear();
     m_buildOutput->clearDiagnostics();
     setBusy(true);
@@ -1199,6 +1208,7 @@ void MainWindow::onTranslate()
         return;
     }
 
+    revealBuildOutput();
     m_buildOutput->clear();
     m_buildOutput->clearDiagnostics();
     setBusy(true);
@@ -1209,6 +1219,7 @@ void MainWindow::onClean()
 {
     if (!m_project.isValid())
         return;
+    revealBuildOutput();
     m_buildOutput->clear();
     m_buildOutput->clearDiagnostics();
     m_engine->clean();
