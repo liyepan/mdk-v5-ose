@@ -34,6 +34,44 @@ public:
         }
         return QProxyStyle::standardIcon(which, option, widget);
     }
+
+    int pixelMetric(PixelMetric metric, const QStyleOption* option = nullptr,
+                    const QWidget* widget = nullptr) const override
+    {
+        // 页签关闭按钮默认 20x20，偏大，页签会被撑宽
+        if (metric == PM_TabCloseIndicatorWidth || metric == PM_TabCloseIndicatorHeight)
+            return 14;
+        return QProxyStyle::pixelMetric(metric, option, widget);
+    }
+
+    // 页签叉号是 QTabBar 的 CloseButton 用 PE_IndicatorTabClose 画出来的，
+    // 不是按钮的 icon —— 所以这里必须接管图元，否则 setIcon 等于白设
+    void drawPrimitive(PrimitiveElement element, const QStyleOption* option, QPainter* painter,
+                       const QWidget* widget = nullptr) const override
+    {
+        if (element != PE_IndicatorTabClose) {
+            QProxyStyle::drawPrimitive(element, option, painter, widget);
+            return;
+        }
+
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+
+        const QRectF rect = QRectF(option->rect);
+        const qreal inset = rect.width() * 0.3;
+        const QRectF cross = rect.adjusted(inset, inset, -inset, -inset);
+
+        const bool hovered = (option->state & State_MouseOver) != 0;
+        const bool enabled = (option->state & State_Enabled) != 0;
+        const QColor color = !enabled ? QColor(0xc4, 0xca, 0xd2)
+                                      : (hovered ? QColor(0xc0, 0x2a, 0x1e)
+                                                 : QColor(0x67, 0x70, 0x7d));
+
+        painter->setPen(QPen(color, 1.6, Qt::SolidLine, Qt::RoundCap));
+        painter->drawLine(cross.topLeft(), cross.bottomRight());
+        painter->drawLine(cross.topRight(), cross.bottomLeft());
+        painter->restore();
+    }
 };
 
 const QColor kInk(0x3c, 0x3c, 0x3c);
@@ -537,7 +575,7 @@ QDockWidget::title { background: #eef2f7; color: #333b45; padding: 6px 10px;
 QTabWidget { background: #e9edf2; }
 QTabWidget::pane { background: #ffffff; border: 1px solid #c9d2dc; }
 QTabBar { background: transparent; }
-QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 2px 10px 2px 10px; margin-right: 2px;
+QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 2px 6px 2px 10px; margin-right: 2px;
                border: 1px solid #d8dee6; border-bottom: none;
                border-top-left-radius: 6px; border-top-right-radius: 6px; }
 QTabBar::tab:selected { background: #ffffff; color: #1f2328;

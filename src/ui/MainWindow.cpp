@@ -778,20 +778,6 @@ void MainWindow::createStatusBar()
 
 // ---------------------------------------------------------------- 工程
 
-void MainWindow::refreshTabCloseIcons()
-{
-    if (!m_tabs || !m_tabs->tabBar())
-        return;
-
-    const QIcon icon = KeilStyle::icon(QStringLiteral("close"), 16);
-    for (QAbstractButton* button : m_tabs->tabBar()->findChildren<QAbstractButton*>()) {
-        if (qobject_cast<QToolButton*>(button))
-            continue;      // 滚动按钮，不是关闭按钮
-        button->setIcon(icon);
-        button->setIconSize(QSize(12, 12));
-    }
-}
-
 void MainWindow::onNewFile()
 {
     static int untitledCounter = 0;
@@ -815,7 +801,6 @@ void MainWindow::onNewFile()
     const int index = m_tabs->addTab(editor, QStringLiteral("untitled%1").arg(++untitledCounter));
     m_tabs->setCurrentIndex(index);
     m_tabs->tabBar()->setTabData(index, nextTabColor());
-    refreshTabCloseIcons();
     editor->setFocus();
     updateEncodingLabel();
 }
@@ -1043,7 +1028,6 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     if (!m_fileTabColors.contains(abs))
         m_fileTabColors.insert(abs, nextTabColor());
     m_tabs->tabBar()->setTabData(index, m_fileTabColors.value(abs));
-    refreshTabCloseIcons();
     m_tabs->setCurrentIndex(index);
     updateEncodingLabel();
 
