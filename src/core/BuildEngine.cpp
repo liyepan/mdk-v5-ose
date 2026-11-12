@@ -421,9 +421,10 @@ QStringList BuildEngine::linkArgs(const QStringList& objects) const
     if (t->useMicrolib)
         a << QStringLiteral("--library_type=microlib");
 
-    // 不要 --info sizes：那张按 .o 列尺寸的表会把 Build Output 刷满。
-    // uVision 也只打一行 Program Size，明细进 .map 文件。
+    // 关键：--map 单独用会把整张内存映射打到 stdout（刷屏），且不产生 .map 文件。
+    // 必须配 --list=<文件> 才能重定向到文件里。
     a << QStringLiteral("--map");
+    a << (QStringLiteral("--list=") + native(mapPath()));
     a << QStringLiteral("-o") << native(axfPath());
 
     if (!t->linkerMisc.trimmed().isEmpty())
