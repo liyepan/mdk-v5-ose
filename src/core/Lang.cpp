@@ -16,6 +16,13 @@ const QHash<QString, QString>& dictionary()
 
         // ---- 文件菜单 ----
         add("&File", QStringLiteral("文件(&F)"));
+        add("New File", QStringLiteral("新建文件"));
+        add("Open File", QStringLiteral("打开文件"));
+        add("Save As...", QStringLiteral("另存为..."));
+        add("Save As", QStringLiteral("另存为"));
+        add("Batch Build", QStringLiteral("批量编译"));
+        add("Insert/Remove Breakpoint", QStringLiteral("插入/移除断点"));
+        add("Enable/Disable Breakpoint", QStringLiteral("启用/禁用断点"));
         add("New Project...", QStringLiteral("新建工程..."));
         add("Open Project...", QStringLiteral("打开工程..."));
         add("Recent Projects", QStringLiteral("最近工程"));

@@ -24,6 +24,7 @@
 #include <QFileInfo>
 #include <QInputDialog>
 #include <QLabel>
+#include <QLayout>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -208,6 +209,23 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::createActions()
 {
+    m_actNewFile = new QAction(KeilStyle::icon(QStringLiteral("new")),
+                               Lang::t("New File"), this);
+    m_actNewFile->setShortcut(QKeySequence::New);
+    m_actNewFile->setToolTip(Lang::t("New File"));
+    connect(m_actNewFile, &QAction::triggered, this, &MainWindow::onNewFile);
+
+    m_actOpenFile = new QAction(KeilStyle::icon(QStringLiteral("open")),
+                                Lang::t("Open File"), this);
+    m_actOpenFile->setShortcut(QKeySequence::Open);
+    m_actOpenFile->setToolTip(Lang::t("Open File"));
+    connect(m_actOpenFile, &QAction::triggered, this, &MainWindow::onOpenFile);
+
+    m_actBatchBuild = new QAction(KeilStyle::icon(QStringLiteral("batchbuild")),
+                                  Lang::t("Batch Build"), this);
+    m_actBatchBuild->setEnabled(false);
+    m_actBatchBuild->setToolTip(QStringLiteral("Batch Build (not implemented)"));
+
     m_actBuild = new QAction(KeilStyle::icon(QStringLiteral("build")),
                              Lang::t("Build Target"), this);
     m_actBuild->setShortcut(QKeySequence(Qt::Key_F7));
@@ -257,6 +275,9 @@ void MainWindow::createActions()
 void MainWindow::createMenus()
 {
     QMenu* fileMenu = menuBar()->addMenu(Lang::t("&File"));
+    fileMenu->addAction(m_actNewFile);
+    fileMenu->addAction(m_actOpenFile);
+    fileMenu->addSeparator();
     fileMenu->addAction(Lang::t("New Project..."), this, &MainWindow::onNewProject);
     fileMenu->addAction(Lang::t("Open Project..."), this, &MainWindow::onOpenProject);
     m_recentMenu = fileMenu->addMenu(Lang::t("Recent Projects"));
@@ -266,6 +287,7 @@ void MainWindow::createMenus()
     fileMenu->addSeparator();
     fileMenu->addAction(m_actSave);
     fileMenu->addAction(m_actSaveAll);
+    fileMenu->addAction(Lang::t("Save As..."), this, &MainWindow::onSaveAs);
     fileMenu->addSeparator();
     fileMenu->addAction(Lang::t("Exit"), this, &QWidget::close);
 
@@ -496,39 +518,51 @@ void MainWindow::createMenus()
 
 void MainWindow::createToolBars()
 {
-    auto* fileBar = addToolBar(QStringLiteral("File"));
-    fileBar->setObjectName(QStringLiteral("fileBar"));
-    fileBar->setIconSize(QSize(16, 16));
-    fileBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    fileBar->setMovable(false);
+    // uVision 的布局：三条独立横排、左对齐、每排自己一个拖动柄。
+    // 用 addToolBarBreak() 保证每条占一行，而不是挤在同一行里。
+    auto makeBar = [this](const QString& title) {
+        auto* bar = new QToolBar(title, this);
+        bar->setObjectName(title + QStringLiteral("Bar"));
+        bar->setIconSize(QSize(16, 16));
+        bar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        bar->setMovable(true);        // 有拖动柄，和 uVision 一样能挪
+        bar->setFloatable(false);
+        if (bar->layout())
+            bar->layout()->setContentsMargins(3, 0, 3, 0);
+        addToolBar(bar);
+        addToolBarBreak();
+        return bar;
+    };
+
+    // ---- 第 1 排：文件（New / Open / Save / Save All）----
+    QToolBar* fileBar = makeBar(QStringLiteral("File"));
+    fileBar->addAction(m_actNewFile);
+    fileBar->addAction(m_actOpenFile);
     fileBar->addAction(m_actSave);
     fileBar->addAction(m_actSaveAll);
 
-    auto* buildBar = addToolBar(QStringLiteral("Build"));
-    buildBar->setObjectName(QStringLiteral("buildBar"));
-    buildBar->setIconSize(QSize(16, 16));
-    buildBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    buildBar->setMovable(false);
+    // ---- 第 2 排：构建（Translate / Build / Rebuild / Batch / Stop）----
+    QToolBar* buildBar = makeBar(QStringLiteral("Build"));
+    buildBar->addAction(m_actTranslate);
     buildBar->addAction(m_actBuild);
     buildBar->addAction(m_actRebuild);
-    buildBar->addAction(m_actTranslate);
+    buildBar->addAction(m_actBatchBuild);
     buildBar->addSeparator();
     buildBar->addAction(m_actStop);
 
-    auto* debugBar = addToolBar(QStringLiteral("Debug"));
-    debugBar->setObjectName(QStringLiteral("debugBar"));
-    debugBar->setIconSize(QSize(16, 16));
-    debugBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    debugBar->setMovable(false);
+    // ---- 第 3 排：调试（和 uVision 同序）----
+    QToolBar* debugBar = makeBar(QStringLiteral("Debug"));
 
     auto addDebugAction = [this, debugBar](const QString& icon, const QString& text,
-                                           const QKeySequence& shortcut) {
+                                           const QKeySequence& shortcut, bool enabled = false) {
         QAction* a = new QAction(KeilStyle::icon(icon), text, this);
         a->setToolTip(text);
         if (!shortcut.isEmpty())
             a->setShortcut(shortcut);
+        a->setEnabled(enabled);
         connect(a, &QAction::triggered, this, &MainWindow::onDebugPlaceholder);
         debugBar->addAction(a);
+        return a;
     };
 
     addDebugAction(QStringLiteral("debug_start"), Lang::t("Start/Stop Debug Session"),
@@ -537,12 +571,18 @@ void MainWindow::createToolBars()
     addDebugAction(QStringLiteral("stop"), Lang::t("Stop"), QKeySequence());
     debugBar->addSeparator();
     addDebugAction(QStringLiteral("step"), Lang::t("Step"), QKeySequence(Qt::Key_F11));
-    addDebugAction(QStringLiteral("stepover"), Lang::t("Step Over"),
-                   QKeySequence(Qt::Key_F10));
+    addDebugAction(QStringLiteral("stepover"), Lang::t("Step Over"), QKeySequence(Qt::Key_F10));
     addDebugAction(QStringLiteral("stepout"), Lang::t("Step Out"),
                    QKeySequence(Qt::SHIFT + Qt::Key_F11));
     addDebugAction(QStringLiteral("runtocursor"), Lang::t("Run to Cursor Line"),
                    QKeySequence(Qt::CTRL + Qt::Key_F10));
+    debugBar->addSeparator();
+    addDebugAction(QStringLiteral("reset"), Lang::t("Reset"), QKeySequence());
+    debugBar->addSeparator();
+    addDebugAction(QStringLiteral("breakpoint"), Lang::t("Insert/Remove Breakpoint"),
+                   QKeySequence(Qt::Key_F9));
+    addDebugAction(QStringLiteral("breakpoint_off"), Lang::t("Enable/Disable Breakpoint"),
+                   QKeySequence());
 }
 
 void MainWindow::createDocks()
@@ -593,6 +633,71 @@ void MainWindow::createStatusBar()
 }
 
 // ---------------------------------------------------------------- 工程
+
+void MainWindow::onNewFile()
+{
+    static int untitledCounter = 0;
+
+    auto* editor = new CodeEditor(m_tabs);
+    connect(editor, &CodeEditor::cursorPositionChanged, this, &MainWindow::onCursorMoved);
+    connect(editor, &CodeEditor::zoomRequested, this, &MainWindow::changeEditorZoom);
+    connect(editor, &CodeEditor::wordActivated, this, &MainWindow::onWordActivated);
+    connect(editor, &CodeEditor::includeActivated, this, &MainWindow::onIncludeActivated);
+    connect(editor, &CodeEditor::encodingChanged, this,
+            [this](const QString&) { updateEncodingLabel(); });
+
+    if (m_editorZoom > 0.0)
+        editor->setZoomPointSize(m_editorZoom);
+
+    editor->setSymbolChecker([this](const QString& word) {
+        ensureSymbolIndex();
+        return !m_symbols.lookup(word).isEmpty();
+    });
+
+    const int index = m_tabs->addTab(editor, QStringLiteral("untitled%1").arg(++untitledCounter));
+    m_tabs->setCurrentIndex(index);
+    m_tabs->tabBar()->setTabData(index, nextTabColor());
+    attachTabCloseButton(index, editor);
+    editor->setFocus();
+    updateEncodingLabel();
+}
+
+void MainWindow::onOpenFile()
+{
+    const QString path = QFileDialog::getOpenFileName(
+        this, Lang::t("Open File"),
+        m_project.isValid() ? m_project.directory() : QString(),
+        QStringLiteral("Source Files (*.c *.h *.cpp *.hpp *.s *.S);;All Files (*)"));
+    if (!path.isEmpty())
+        openFile(path);
+}
+
+void MainWindow::onSaveAs()
+{
+    CodeEditor* editor = currentEditor();
+    if (!editor)
+        return;
+
+    QString suggested = editor->filePath();
+    if (suggested.isEmpty() && m_project.isValid())
+        suggested = m_project.directory() + QLatin1Char('/')
+                    + m_tabs->tabText(m_tabs->currentIndex());
+
+    const QString path = QFileDialog::getSaveFileName(this, Lang::t("Save As"), suggested,
+                                                     QStringLiteral("C Source (*.c);;All Files (*)"));
+    if (path.isEmpty())
+        return;
+
+    editor->setFilePath(path);
+    if (!saveEditor(editor))
+        return;
+
+    const int index = m_tabs->indexOf(editor);
+    if (index >= 0) {
+        m_tabs->setTabText(index, QFileInfo(path).fileName());
+        m_tabs->setTabToolTip(index, path);
+    }
+}
 
 void MainWindow::onNewProject()
 {
@@ -753,24 +858,7 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
         m_fileTabColors.insert(abs, nextTabColor());
     m_tabs->tabBar()->setTabData(index, m_fileTabColors.value(abs));
 
-    // 自绘关闭按钮：图标是自己的，尺寸也更紧凑
-    auto* closeButton = new QToolButton(m_tabs->tabBar());
-    closeButton->setIcon(KeilStyle::icon(QStringLiteral("close"), 16));
-    closeButton->setIconSize(QSize(12, 12));
-    closeButton->setAutoRaise(true);
-    closeButton->setCursor(Qt::ArrowCursor);
-    closeButton->setToolTip(QStringLiteral("Close"));
-    connect(closeButton, &QToolButton::clicked, this, [this, editor]() {
-        QMetaObject::invokeMethod(
-            this,
-            [this, editor]() {
-                const int idx = m_tabs->indexOf(editor);
-                if (idx >= 0)
-                    onTabCloseRequested(idx);
-            },
-            Qt::QueuedConnection);
-    });
-    m_tabs->tabBar()->setTabButton(index, QTabBar::RightSide, closeButton);
+    attachTabCloseButton(index, editor);
     m_tabs->setCurrentIndex(index);
     updateEncodingLabel();
 
@@ -835,6 +923,28 @@ void MainWindow::revealBuildOutput()
     m_outputDock->raise();
 }
 
+void MainWindow::attachTabCloseButton(int index, CodeEditor* editor)
+{
+    // 自绘关闭按钮：图标是自己的，尺寸也更紧凑
+    auto* closeButton = new QToolButton(m_tabs->tabBar());
+    closeButton->setIcon(KeilStyle::icon(QStringLiteral("close"), 16));
+    closeButton->setIconSize(QSize(12, 12));
+    closeButton->setAutoRaise(true);
+    closeButton->setCursor(Qt::ArrowCursor);
+    closeButton->setToolTip(QStringLiteral("Close"));
+    connect(closeButton, &QToolButton::clicked, this, [this, editor]() {
+        QMetaObject::invokeMethod(
+            this,
+            [this, editor]() {
+                const int idx = m_tabs->indexOf(editor);
+                if (idx >= 0)
+                    onTabCloseRequested(idx);
+            },
+            Qt::QueuedConnection);
+    });
+    m_tabs->tabBar()->setTabButton(index, QTabBar::RightSide, closeButton);
+}
+
 QColor MainWindow::nextTabColor()
 {
     static const QColor palette[] = {
@@ -851,6 +961,12 @@ void MainWindow::onSave()
     CodeEditor* editor = currentEditor();
     if (!editor)
         return;
+
+    // 新建的未命名文件，Ctrl+S 先弹另存为
+    if (editor->filePath().isEmpty()) {
+        onSaveAs();
+        return;
+    }
 
     // Ctrl+S = 先格式化再存盘
     if (Settings::instance().formatOnSave())
@@ -1085,10 +1201,33 @@ void MainWindow::retranslateUi()
 
     const QList<QToolBar*> bars = findChildren<QToolBar*>();
     for (QToolBar* bar : bars) {
+        removeToolBarBreak(bar);
         removeToolBar(bar);
+        bar->hide();          // deleteLater 之前先藏起来，避免视觉残留
         bar->deleteLater();
     }
     createToolBars();
+
+    // 这些 QAction 是成员，语言切换时要手动刷新文本
+    auto retitle = [](QAction* action, const QString& text, const QString& tip = QString()) {
+        if (!action)
+            return;
+        action->setText(text);
+        action->setToolTip(tip.isEmpty() ? text : tip);
+    };
+    retitle(m_actNewFile, Lang::t("New File"));
+    retitle(m_actOpenFile, Lang::t("Open File"));
+    retitle(m_actSave, Lang::t("Save"));
+    retitle(m_actSaveAll, Lang::t("Save All"));
+    retitle(m_actBuild, Lang::t("Build Target"), Lang::t("Build target files (F7)"));
+    retitle(m_actRebuild, Lang::t("Rebuild all target files"));
+    retitle(m_actTranslate, Lang::t("Translate"), Lang::t("Translate current file (Ctrl+F7)"));
+    retitle(m_actStop, Lang::t("Stop build"));
+    retitle(m_actClean, Lang::t("Clean targets"));
+    retitle(m_actBatchBuild, Lang::t("Batch Build"));
+    retitle(m_actOptionsTarget, Lang::t("Options for Target..."));
+    retitle(m_actCloseProject, Lang::t("Close Project"));
+    retitle(m_actDownload, Lang::t("Download to Flash"));
 
     m_projectDock->setWindowTitle(Lang::t("Project"));
     m_outputDock->setWindowTitle(Lang::t("Build Output"));

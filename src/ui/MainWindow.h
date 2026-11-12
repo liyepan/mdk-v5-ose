@@ -32,6 +32,9 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private slots:
+    void onNewFile();
+    void onOpenFile();
+    void onSaveAs();
     void onNewProject();
     void onOpenProject();
     void onCloseProject();
@@ -86,6 +89,7 @@ private:
     void resetEditorZoom();
 
     QColor nextTabColor();
+    void   attachTabCloseButton(int index, CodeEditor* editor);
     void revealBuildOutput();
     void formatEditor(CodeEditor* editor);
     bool saveEditor(CodeEditor* editor);
@@ -123,6 +127,9 @@ private:
     QLabel* m_statusEncoding = nullptr;
     QLabel* m_statusPosition = nullptr;
 
+    QAction* m_actNewFile = nullptr;
+    QAction* m_actOpenFile = nullptr;
+    QAction* m_actBatchBuild = nullptr;
     QAction* m_actBuild = nullptr;
     QAction* m_actRebuild = nullptr;
     QAction* m_actTranslate = nullptr;

@@ -240,6 +240,34 @@ void paintIcon(QPainter& p, const QString& name, int size)
     } else if (name == QLatin1String("file_asm")) {
         drawPage(p, r);
         drawLetter(p, r, QStringLiteral("A"), QColor(0x8a, 0x4a, 0x1a));
+    } else if (name == QLatin1String("batchbuild")) {
+        // 多张纸叠着 + 一个小锤子，对应 uVision 的 Batch Build
+        p.setPen(QPen(QColor(0x55, 0x55, 0x55), 1));
+        p.setBrush(QColor(0xdd, 0xdd, 0xdd));
+        p.drawRect(QRectF(r.left() + 2.5, r.top() + 1.0, 7.5, 9.0));
+        p.setBrush(kPage);
+        p.drawRect(QRectF(r.left() + 1.0, r.top() + 3.0, 7.5, 9.5));
+        p.setPen(QPen(QColor(0x99, 0x99, 0x99), 1));
+        for (int i = 0; i < 3; ++i)
+            p.drawLine(QPointF(r.left() + 2.5, r.top() + 5.5 + i * 2.2),
+                       QPointF(r.left() + 7.0, r.top() + 5.5 + i * 2.2));
+        drawHammer(p, QRectF(r.left() + 7.5, r.top() + 6.5, 7.0, 7.0));
+    } else if (name == QLatin1String("reset")) {
+        // 复位：环形箭头
+        p.setPen(QPen(kBlue, 1.6));
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(QRectF(r.left() + 2.0, r.top() + 2.0, 10.0, 10.0), 40 * 16, 280 * 16);
+        QPolygonF tip;
+        tip << QPointF(r.right() - 1.0, r.top() + 3.0)
+            << QPointF(r.right() - 4.5, r.top() + 4.5)
+            << QPointF(r.right() - 1.5, r.top() + 6.5);
+        p.setBrush(kBlue);
+        p.setPen(QPen(kBlue, 0));
+        p.drawPolygon(tip);
+    } else if (name == QLatin1String("breakpoint_off")) {
+        p.setPen(QPen(kRed, 1.3));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(r.adjusted(1.8, 1.8, -1.8, -1.8));
     } else if (name == QLatin1String("close")) {
         // 细一点的圆头叉号，比 Fusion 自带的方块 X 好看
         QPen pen(QColor(0x7b, 0x84, 0x91), 1.5, Qt::SolidLine, Qt::RoundCap);
@@ -310,9 +338,9 @@ QMenu::separator { height: 1px; background: #e8ecf1; margin: 5px 10px; }
 
 /* ---------- 工具栏 ---------- */
 QToolBar { background: #ffffff; border: none; border-bottom: 1px solid #d8dee6;
-           spacing: 3px; padding: 4px 6px; }
+           spacing: 2px; padding: 1px 4px; }
 QToolBar::separator { width: 1px; background: #dde3ea; margin: 4px 6px; }
-QToolButton { background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px; }
+QToolButton { background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 2px; }
 QToolButton:hover { background: #eef2f7; border-color: #dbe2ea; }
 QToolButton:pressed { background: #dfe6ef; }
 QToolButton:checked { background: #e4edfb; border-color: #c9dcf7; }
