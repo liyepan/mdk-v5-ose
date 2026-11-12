@@ -167,21 +167,11 @@ CMake 配置阶段会直接报找不到 GL/gl.h。没有的话用 qmake 那条�
 | Job | 产物 |
 |---|---|
 | windows-x86_64 | `uVision5-OSE-<版本>-win64-setup.exe`（NSIS）+ `-portable.zip` |
-| windows-arm64 | 同上，arm64（**默认关闭**，见下） |
 | release | 汇总产物 + `SHA256SUMS`，挂到 `v<版本>` 的 Release |
 
 版本号从 `mdk-v5-ose.pro` 的 `VERSION = x.y.z` 读，改版本只改这一处。
 
-### 关于 arm64
-
-**官方 Qt 5.15.2 没有 Windows arm64 的二进制包**（Qt for Windows on ARM 从 Qt 6.2 才有）。
-所以 arm64 job 默认不跑，需要两件事同时满足：
-
-1. 仓库 Variables 里设 `ENABLE_WIN_ARM64 = true`
-2. 提供一份 arm64 版 Qt5，路径填在 `WIN_ARM64_QT_DIR`
-
-没有 arm64 Qt 时，直接发 x64 包即可：Windows 11 on ARM 能模拟运行 x64 程序，功能一致，
-只是没有原生优化。
+只出 win64（x86_64）包：Qt 5.15 官方没有 Windows on ARM 的二进制包，交叉编译不现实，所以没做 arm64。
 
 ### 安装包做了什么
 
