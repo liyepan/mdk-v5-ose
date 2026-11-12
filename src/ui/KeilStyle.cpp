@@ -543,8 +543,8 @@ QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 2px 10px 2px 10px; 
 QTabBar::tab:selected { background: #ffffff; color: #1f2328;
                         border-color: #c9d2dc; border-bottom: none; }
 QTabBar::tab:hover:!selected { background: #e4e9f0; }
-QTabBar::close-button { subcontrol-position: right; subcontrol-origin: padding;
-                        border-radius: 4px; margin-left: 4px; }
+/* 不要在这里描述 QTabBar::close-button：QSS 一旦接管这个子控件，
+   没有 image: 就会画成空白，图标直接消失 */
 QTabBar QToolButton:hover { background: #fbdad8; }
 QTabBar::close-button { border-radius: 4px; }
 
