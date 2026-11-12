@@ -3,6 +3,7 @@
 
 #include "core/Formatter.h"
 #include "core/Settings.h"
+#include "core/Timing.h"
 #include "core/UvprojReader.h"
 #include "ui/BuildOutput.h"
 #include "ui/CodeEditor.h"
@@ -33,7 +34,9 @@
 #include <QLayout>
 #include <QMenu>
 #include <QMenuBar>
+#include <QEvent>
 #include <QMouseEvent>
+#include <QTimer>
 #include <functional>
 #include <QMessageBox>
 #include <QStatusBar>
@@ -741,6 +744,7 @@ void MainWindow::createToolBars()
             m_symbolCombo->setInsertPolicy(QComboBox::NoInsert);
             m_symbolCombo->lineEdit()->setPlaceholderText(Lang::t("Symbols"));
             m_symbolCombo->setToolTip(Lang::t("Symbols"));
+            m_symbolCombo->installEventFilter(this);
             connect(m_symbolCombo, QOverload<int>::of(&QComboBox::activated),
                     this, &MainWindow::onSymbolChosen);
             mainBar->addWidget(m_symbolCombo);
@@ -963,12 +967,17 @@ void MainWindow::onOpenProject()
 
 void MainWindow::openProject(const QString& path)
 {
+    Timing::Scope openScope("openProject");
+    Timing::Probe openProbe("openProject");
+
     UvProject project;
     QString error;
     if (!Uvproj::load(path, project, &error)) {
         QMessageBox::critical(this, Lang::t("Open Project"), error);
         return;
     }
+
+    openProbe.mark("xml parse");
 
     m_project = project;
     m_activeTarget = 0;
@@ -977,20 +986,29 @@ void MainWindow::openProject(const QString& path)
     Settings::instance().addRecentProject(m_project.filePath);
     Settings::instance().sync();
 
+    openProbe.mark("settings sync");
+
     applyProject();
 }
 
 void MainWindow::applyProject()
 {
+    Timing::Scope applyScope("applyProject");
+    Timing::Probe applyProbe("applyProject");
+
     m_engine->setProject(m_project, m_activeTarget);
+    applyProbe.mark("engine");
 
     m_projectTree->setProject(m_project, m_activeTarget);
+    applyProbe.mark("project tree");
     m_buildOutput->setProjectDir(m_project.directory());
     m_symbols.clear();
     m_navHistory.clear();
     m_navIndex = -1;
     populateTargetCombo();
-    populateSymbolCombo();
+    applyProbe.mark("target combo");
+    invalidateSymbols();     // 符号索引挪到之后空闲时再建
+    applyProbe.mark("symbol index");
 
     updateWindowTitle();
     setBusy(false);
@@ -1005,6 +1023,7 @@ void MainWindow::onCloseProject()
         onTabCloseRequested(m_tabs->count() - 1);
 
     m_project = UvProject();
+    invalidateSymbols();
     m_projectTree->clear();
     m_engine->setProject(m_project, 0);
     m_buildOutput->clear();
@@ -1028,7 +1047,7 @@ void MainWindow::onTargetChanged(int index)
     if (m_targetCombo && m_targetCombo->currentIndex() != index)
         m_targetCombo->setCurrentIndex(index);
 
-    populateSymbolCombo();
+    invalidateSymbols();
     updateWindowTitle();
     m_updatingTargets = false;
 }
@@ -1405,14 +1424,60 @@ void MainWindow::populateSymbolCombo()
         return;
 
     m_symbolCombo->clear();
+    m_symbolComboFilled = false;
+
     if (!m_project.isValid())
         return;
 
     ensureSymbolIndex();
     const QStringList names = m_symbols.names();
+
     m_symbolCombo->addItems(names);
     m_symbolCombo->setCurrentIndex(-1);
     m_symbolCombo->setToolTip(QStringLiteral("%1 symbols").arg(names.size()));
+    m_symbolComboFilled = true;
+}
+
+// 打开工程 / 切 target 时只把索引作废，真正的扫描推迟到空闲时再做，
+// 这样打开工程的时间只花在解析 XML 和建工程树上。
+void MainWindow::invalidateSymbols()
+{
+    m_symbols.clear();
+    m_symbolComboFilled = false;
+
+    if (m_symbolCombo)
+        m_symbolCombo->clear();
+
+    QTimer::singleShot(250, this, &MainWindow::warmSymbolIndex);
+}
+
+void MainWindow::warmSymbolIndex()
+{
+    if (!m_project.isValid() || m_symbolComboFilled)
+        return;
+
+    Timing::Scope scope("warmSymbolIndex");
+    populateSymbolCombo();
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    // 下拉框在被碰到的第一下才去建索引、填内容
+    if (watched == m_symbolCombo && !m_symbolComboFilled) {
+        switch (event->type()) {
+        case QEvent::MouseButtonPress:
+        case QEvent::MouseButtonDblClick:
+        case QEvent::KeyPress:
+        case QEvent::Wheel:
+        case QEvent::FocusIn:
+            populateSymbolCombo();
+            break;
+        default:
+            break;
+        }
+    }
+
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::onSymbolChosen(int index)

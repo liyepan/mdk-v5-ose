@@ -41,6 +41,7 @@ HEADERS += \
     src/core/Formatter.h \
     src/core/Lang.h \
     src/core/SymbolIndex.h \
+    src/core/Timing.h \
     src/ui/KeilStyle.h \
     src/ui/CSyntaxHighlighter.h \
     src/ui/CodeEditor.h \

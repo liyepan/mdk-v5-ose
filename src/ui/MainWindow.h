@@ -32,6 +32,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onNewFile();
@@ -103,6 +104,8 @@ private:
     void createMainToolbarActions();
     void applyToolBarLayout();
     void populateSymbolCombo();
+    void invalidateSymbols();
+    void warmSymbolIndex();
     void populateTargetCombo();
     void recordNavigation(const QString& file, int line);
     void createMenus();
@@ -167,6 +170,7 @@ private:
     QList<QAction*> m_mainBarActions;   // nullptr = 分隔线
     QList<QToolBar*> m_toolBars;
     QComboBox*      m_symbolCombo = nullptr;
+    bool            m_symbolComboFilled = false;
     QComboBox*      m_targetCombo = nullptr;
     bool            m_updatingTargets = false;
     QAction*        m_symbolComboAnchor = nullptr;

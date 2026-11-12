@@ -1,6 +1,7 @@
 #include "core/BuildEngine.h"
 #include "core/Lang.h"
 #include "core/Settings.h"
+#include "core/Timing.h"
 #include "core/Toolchain.h"
 #include "core/UvprojReader.h"
 #include "ui/KeilStyle.h"
@@ -127,17 +128,24 @@ int main(int argc, char* argv[])
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 
+    // 启动慢的时候看这里：MDK_OSE_TIMING=1 会把各个阶段打到 stderr
+    Timing::Scope startupScope("startup");
+    Timing::Probe startupProbe("startup");
+
     QApplication app(argc, argv);
     app.setOrganizationName(QStringLiteral("linuxacme"));
     app.setApplicationName(QStringLiteral("mdk-v5-ose"));
     app.setApplicationDisplayName(QStringLiteral("uVision5-OSE"));
 
     Lang::set(Lang::idFromString(Settings::instance().language()));
+    startupProbe.mark("QApplication");
 
     KeilStyle::apply(app);
+    startupProbe.mark("style");
 
     MainWindow window;
     window.show();
+    startupProbe.mark("main window");
 
     QString projectPath = opt.project;
     if (projectPath.isEmpty())
