@@ -9,6 +9,7 @@
 #include "ui/ProjectTree.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDir>
@@ -24,6 +25,7 @@
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QTextStream>
+#include <QThread>
 #include <QToolBar>
 #include <QToolButton>
 
@@ -352,6 +354,40 @@ void MainWindow::createMenus()
     QMenu* toolsMenu = menuBar()->addMenu(QStringLiteral("&Tools"));
     toolsMenu->addAction(QStringLiteral("Configure Toolchain..."),
                          this, &MainWindow::onConfigureToolchain);
+
+    // 并行编译任务数：Auto = 本机逻辑处理器数
+    QMenu* jobsMenu = toolsMenu->addMenu(QStringLiteral("Parallel Build"));
+    auto* jobsGroup = new QActionGroup(this);
+    jobsGroup->setExclusive(true);
+
+    auto addJobsAction = [this, jobsMenu, jobsGroup](const QString& text, int value) {
+        QAction* a = jobsMenu->addAction(text);
+        a->setCheckable(true);
+        a->setData(value);
+        jobsGroup->addAction(a);
+        connect(a, &QAction::triggered, this, [this, value]() {
+            const int n = (value <= 0) ? qMax(1, QThread::idealThreadCount()) : value;
+            m_engine->setJobs(n);
+            Settings::instance().setBuildJobs(n);
+            Settings::instance().sync();
+            updateCompilerStatus();
+        });
+    };
+
+    addJobsAction(QStringLiteral("Auto  (%1 logical threads)")
+                      .arg(QThread::idealThreadCount()), 0);
+    jobsMenu->addSeparator();
+    for (int n : { 1, 2, 4, 8, 16, 32, 64 })
+        addJobsAction(QString::number(n), n);
+
+    connect(jobsMenu, &QMenu::aboutToShow, this, [this, jobsGroup]() {
+        for (QAction* a : jobsGroup->actions()) {
+            const int v = a->data().toInt();
+            const int eff = (v <= 0) ? qMax(1, QThread::idealThreadCount()) : v;
+            a->setChecked(eff == m_engine->jobs());
+        }
+    });
+
     QAction* customTools = toolsMenu->addAction(QStringLiteral("Customize Tools Menu..."));
     customTools->setEnabled(false);
 
@@ -744,10 +780,17 @@ void MainWindow::reloadToolchain()
     m_toolchain = Toolchain::detect(dir, s.toolchainFamily());
     m_engine->setToolchain(m_toolchain);
 
-    if (m_toolchain.isValid())
-        m_statusToolchain->setText(QStringLiteral("Compiler: %1").arg(m_toolchain.family));
-    else
-        m_statusToolchain->setText(QStringLiteral("Compiler: not configured"));
+    updateCompilerStatus();
+}
+
+void MainWindow::updateCompilerStatus()
+{
+    const QString compiler = m_toolchain.isValid()
+                                 ? QStringLiteral("Compiler: %1").arg(m_toolchain.family)
+                                 : QStringLiteral("Compiler: not configured");
+    m_statusToolchain->setText(QStringLiteral("%1  |  Jobs: %2")
+                                   .arg(compiler)
+                                   .arg(m_engine->jobs()));
 }
 
 void MainWindow::onConfigureToolchain()
@@ -761,7 +804,7 @@ void MainWindow::onConfigureToolchain()
     Settings::instance().setToolchainFamily(tc.family);
     Settings::instance().sync();
     m_engine->setToolchain(m_toolchain);
-    m_statusToolchain->setText(QStringLiteral("Compiler: %1").arg(m_toolchain.family));
+    updateCompilerStatus();
 }
 
 void MainWindow::onOptionsForTarget()

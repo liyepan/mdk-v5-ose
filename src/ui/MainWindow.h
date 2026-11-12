@@ -70,6 +70,7 @@ private:
     void updateWindowTitle();
     bool ensureToolchain();
     void reloadToolchain();
+    void updateCompilerStatus();
 
     void changeEditorZoom(int delta);
     void resetEditorZoom();

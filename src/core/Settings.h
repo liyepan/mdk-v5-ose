@@ -23,7 +23,7 @@ public:
     void setToolchainFamily(const QString& family);
 
     // ---- 构建 ----
-    // 并行编译任务数，默认取 CPU 核数；1 表示串行
+    // 并行编译任务数，默认取本机逻辑处理器数（核数 x 超线程）；1 表示串行
     int  buildJobs() const;
     void setBuildJobs(int jobs);
 

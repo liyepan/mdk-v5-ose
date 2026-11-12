@@ -48,7 +48,8 @@ void Settings::setToolchainFamily(const QString& family)
 
 int Settings::buildJobs() const
 {
-    const int fallback = qBound(1, QThread::idealThreadCount(), 16);
+    // 默认就是本机的逻辑处理器数（核数 x 超线程），不设人为上限
+    const int fallback = qBound(1, QThread::idealThreadCount(), 64);
     const int value = m_s.value(QLatin1String(kBuildJobs), fallback).toInt();
     return qBound(1, value, 64);
 }
