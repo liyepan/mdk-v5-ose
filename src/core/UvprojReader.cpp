@@ -5,6 +5,7 @@
 #include <QDomElement>
 #include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QTextStream>
 
 namespace {
@@ -57,6 +58,36 @@ QList<UserProgram> readUserPrograms(const QDomElement& el, const QString& stopTa
         out.append(p);
     }
     return out;
+}
+
+MemoryRegion readMemoryRegion(const QDomElement& el)
+{
+    MemoryRegion r;
+    if (el.isNull())
+        return r;
+
+    bool okStart = false;
+    bool okSize = false;
+    r.start = childText(el, QStringLiteral("StartAddress")).toUInt(&okStart, 0);
+    r.size = childText(el, QStringLiteral("Size")).toUInt(&okSize, 0);
+    if (!okStart || !okSize || r.size == 0)
+        return MemoryRegion();
+    return r;
+}
+
+// <Cpu>IRAM(0x20000000,0x00010000) IROM(0x08000000,0x00080000) CPUTYPE("Cortex-M3")</Cpu>
+MemoryRegion regionFromCpu(const QString& cpu, const QString& tag)
+{
+    const QRegularExpression re(QStringLiteral("%1\\s*\\(\\s*([^,]+?)\\s*,\\s*([^)]+?)\\s*\\)")
+                                    .arg(tag));
+    const QRegularExpressionMatch m = re.match(cpu);
+    if (!m.hasMatch())
+        return MemoryRegion();
+
+    MemoryRegion r;
+    r.start = m.captured(1).toUInt(nullptr, 0);
+    r.size = m.captured(2).toUInt(nullptr, 0);
+    return r;
 }
 
 QDomElement ensureChild(QDomDocument& doc, QDomElement parent, const QString& tag)
@@ -207,6 +238,16 @@ bool load(const QString& path, UvProject& out, QString* error)
 
         // 其它
         t.useMicrolib = childFlag(misc, QStringLiteral("useUlib"), false);
+
+        // 片上存储：优先用 OnChipMemories（Target 对话框里填的），
+        // 没有就退回 <Cpu> 里的 IROM()/IRAM()
+        const QDomElement ocm = misc.firstChildElement(QStringLiteral("OnChipMemories"));
+        t.irom1 = readMemoryRegion(ocm.firstChildElement(QStringLiteral("IROM")));
+        t.iram1 = readMemoryRegion(ocm.firstChildElement(QStringLiteral("IRAM")));
+        if (!t.irom1.isValid())
+            t.irom1 = regionFromCpu(t.cpu, QStringLiteral("IROM"));
+        if (!t.iram1.isValid())
+            t.iram1 = regionFromCpu(t.cpu, QStringLiteral("IRAM"));
 
         // 构建前后用户命令（uVision 的 Before/After 选项卡）
         t.beforeCompile = readUserPrograms(

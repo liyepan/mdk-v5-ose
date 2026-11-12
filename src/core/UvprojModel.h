@@ -49,6 +49,15 @@ struct ProjGroup
     QList<ProjFile> files;
 };
 
+// 片上存储区域（Target 对话框里的 IROM1 / IRAM1）
+struct MemoryRegion
+{
+    quint32 start = 0;
+    quint32 size = 0;
+
+    bool isValid() const { return size > 0; }
+};
+
 // uVision 的 Before Compile / Before Make / After Make 里的一条用户命令
 struct UserProgram
 {
@@ -113,6 +122,10 @@ struct Target
     QString dataAddressRange;           // 0x20000000
     bool    noStartLib = false;
     bool    useMicrolib = false;
+
+    // ---- 片上存储（用来生成 scatter 文件）----
+    MemoryRegion irom1;
+    MemoryRegion iram1;
 
     // ---- 构建前后钩子（每个阶段最多两条，uVision 允许 Prog1/Prog2）----
     QList<UserProgram> beforeCompile;   // <BeforeCompile><UserProg1Name>...

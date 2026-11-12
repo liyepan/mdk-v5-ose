@@ -129,6 +129,10 @@ private:
     QStringList assembleArgs(const ProjGroup& group, const ProjFile& file,
                              const QString& sourcePath, const QString& objectPath) const;
     QStringList linkArgs(const QStringList& objects) const;
+
+    // 按 Target 对话框里的 IROM1/IRAM1 生成 scatter 文件，
+    // 让 Image$$ER_IROM1$$Limit 这类符号存在（Keil 也是这么干的）
+    QString     writeScatterFile() const;
     QStringList libArgs(const QStringList& objects) const;
 
     QStringList scanDependencies(const QString& sourcePath, const QStringList& includeDirs) const;
@@ -159,6 +163,7 @@ private:
 
     QElapsedTimer m_timer;
     QString     m_axfForSize;
+    QString     m_generatedScatter;
 
     QString                     m_signaturePath;
     QHash<QString, QString>     m_signatures;

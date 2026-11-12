@@ -31,6 +31,9 @@
 | 参数指纹 | 存在 Objects/.mdk-ose/<target>.sig；多个 Target 共用 Objects 目录时不会互相误判 |
 | 组级选项 | GroupOption 的 IncludeInBuild、Define、IncludePath、MiscControls，优先级低于文件级、高于 Target |
 | Create Library | CreateLib=1 时走 armar --create，Target 名为 Lib 的那类配置可用 |
+| Scatter 生成 | "Use Memory Layout from Target Dialog" 时按 IROM1/IRAM1 生成 scatter，
+执行域叫 ER_IROM1 / RW_IRAM1，于是 Image$$ER_IROM1$$Limit 这类链接器符号存在
+（只传 --ro-base 是产生不了命名域的，cm_backtrace 那种库会直接 L6218E） |
 | Before/After Make | BeforeCompile / BeforeMake / AfterMake 里的用户命令，
 连 UserProg1Dos16Mode、nStopA1X 的语义都保留；PATH 自动带上工具链目录 |
 | MicroLIB | useUlib=1 时同时给编译器/汇编器定义 __MICROLIB，并给链接器 --library_type=microlib
