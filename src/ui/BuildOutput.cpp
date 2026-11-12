@@ -69,7 +69,7 @@ QTextCharFormat formatForLine(const QString& line)
 
     switch (classifyLine(line)) {
     case LogKind::Dim:
-        fmt.setForeground(QColor(0x6b, 0x72, 0x80));
+        fmt.setForeground(QColor(0x4a, 0x53, 0x61));
         break;
     case LogKind::Header:
         fmt.setForeground(QColor(0x0b, 0x57, 0xd0));
@@ -80,25 +80,25 @@ QTextCharFormat formatForLine(const QString& line)
         fmt.setFontWeight(QFont::DemiBold);
         break;
     case LogKind::Warning:
-        fmt.setForeground(QColor(0xb2, 0x5e, 0x09));
+        fmt.setForeground(QColor(0x9a, 0x4b, 0x00));
         break;
     case LogKind::Info:
-        fmt.setForeground(QColor(0x6b, 0x72, 0x80));
+        fmt.setForeground(QColor(0x5b, 0x64, 0x72));
         break;
     case LogKind::Command:
-        fmt.setForeground(QColor(0x82, 0x50, 0xdf));
+        fmt.setForeground(QColor(0x6b, 0x3f, 0xd4));
         break;
     case LogKind::Size:
-        fmt.setForeground(QColor(0x1a, 0x7f, 0x37));
+        fmt.setForeground(QColor(0x14, 0x71, 0x3a));
         fmt.setFontWeight(QFont::DemiBold);
         break;
     case LogKind::Success:
-        fmt.setForeground(QColor(0x1a, 0x7f, 0x37));
+        fmt.setForeground(QColor(0x14, 0x71, 0x3a));
         fmt.setFontWeight(QFont::DemiBold);
         break;
     case LogKind::Normal:
     default:
-        fmt.setForeground(QColor(0x1f, 0x23, 0x28));
+        fmt.setForeground(QColor(0x10, 0x14, 0x18));
         break;
     }
     return fmt;
