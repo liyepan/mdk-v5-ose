@@ -1,0 +1,290 @@
+#include "ui/KeilStyle.h"
+
+#include <QApplication>
+#include <QFontDatabase>
+#include <QHash>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
+#include <QPolygonF>
+#include <QStyle>
+#include <QStyleFactory>
+#include <QtMath>
+
+namespace {
+
+const QColor kInk(0x3c, 0x3c, 0x3c);
+const QColor kPage(0xff, 0xff, 0xff);
+const QColor kFolder(0xf2, 0xc4, 0x4c);
+const QColor kFolderEdge(0xb0, 0x8c, 0x1c);
+const QColor kGreen(0x2e, 0x8b, 0x34);
+const QColor kRed(0xd0, 0x30, 0x20);
+const QColor kBlue(0x2b, 0x5d, 0x9e);
+
+void drawPage(QPainter& p, const QRectF& r, const QColor& pen = kInk)
+{
+    const qreal fold = 3.5;
+    QPolygonF poly;
+    poly << QPointF(r.left(), r.top())
+         << QPointF(r.right() - fold, r.top())
+         << QPointF(r.right(), r.top() + fold)
+         << QPointF(r.right(), r.bottom())
+         << QPointF(r.left(), r.bottom());
+    p.setPen(QPen(pen, 1));
+    p.setBrush(kPage);
+    p.drawPolygon(poly);
+    p.setPen(QPen(pen.lighter(150), 1));
+    p.drawLine(QPointF(r.right() - fold, r.top()), QPointF(r.right() - fold, r.top() + fold));
+    p.drawLine(QPointF(r.right() - fold, r.top() + fold), QPointF(r.right(), r.top() + fold));
+}
+
+void drawLetter(QPainter& p, const QRectF& r, const QString& ch, const QColor& color)
+{
+    QFont f = p.font();
+    f.setPixelSize(8);
+    f.setBold(true);
+    p.setFont(f);
+    p.setPen(color);
+    p.drawText(QRectF(r.left(), r.top() + 4.0, r.width(), r.height() - 4.0),
+               Qt::AlignHCenter | Qt::AlignTop, ch);
+}
+
+void drawFolderShape(QPainter& p, const QRectF& r)
+{
+    const qreal tabH = r.height() * 0.28;
+    QPolygonF poly;
+    poly << QPointF(r.left(), r.top() + tabH)
+         << QPointF(r.left() + r.width() * 0.35, r.top() + tabH)
+         << QPointF(r.left() + r.width() * 0.45, r.top())
+         << QPointF(r.right(), r.top())
+         << QPointF(r.right(), r.bottom())
+         << QPointF(r.left(), r.bottom());
+    p.setPen(QPen(kFolderEdge, 1));
+    p.setBrush(kFolder);
+    p.drawPolygon(poly);
+}
+
+void drawHammer(QPainter& p, const QRectF& r)
+{
+    p.save();
+    p.translate(r.center());
+    p.rotate(-40.0);
+    p.setPen(QPen(QColor(0x8a, 0x5a, 0x24), 1));
+    p.setBrush(QColor(0xb8, 0x84, 0x4a));
+    p.drawRect(QRectF(-1.2, -0.5, 2.4, 7.0));
+    p.setPen(QPen(QColor(0x50, 0x50, 0x50), 1));
+    p.setBrush(QColor(0x9e, 0x9e, 0x9e));
+    p.drawRect(QRectF(-3.4, -5.2, 6.8, 3.4));
+    p.restore();
+}
+
+void drawTriangle(QPainter& p, const QRectF& r, const QColor& color)
+{
+    QPolygonF poly;
+    poly << QPointF(r.left() + 2, r.top() + 1)
+         << QPointF(r.right() - 1, r.center().y())
+         << QPointF(r.left() + 2, r.bottom() - 1);
+    p.setPen(QPen(color.darker(150), 1));
+    p.setBrush(color);
+    p.drawPolygon(poly);
+}
+
+void drawMagnifier(QPainter& p, const QRectF& r, const QColor& color)
+{
+    p.setPen(QPen(color, 1.6));
+    p.setBrush(QColor(220, 234, 250));
+    p.drawEllipse(QPointF(r.left() + 5.5, r.top() + 5.5), 4.2, 4.2);
+    p.setBrush(Qt::NoBrush);
+    p.drawLine(QPointF(r.left() + 8.8, r.top() + 8.8), QPointF(r.right() - 1.5, r.bottom() - 1.5));
+}
+
+void drawBug(QPainter& p, const QRectF& r)
+{
+    p.setPen(QPen(QColor(0x1f, 0x4d, 0x1f), 1));
+    p.setBrush(QColor(0x6d, 0xb3, 0x4d));
+    p.drawEllipse(QRectF(r.left() + 4.5, r.top() + 4.0, 7.0, 8.0));
+    p.drawLine(QPointF(r.left() + 4.5, r.top() + 7.0), QPointF(r.left() + 1.5, r.top() + 5.5));
+    p.drawLine(QPointF(r.left() + 4.5, r.top() + 9.5), QPointF(r.left() + 1.5, r.top() + 9.5));
+    p.drawLine(QPointF(r.left() + 4.5, r.top() + 12.0), QPointF(r.left() + 1.5, r.top() + 13.5));
+    p.drawLine(QPointF(r.right() - 4.5, r.top() + 7.0), QPointF(r.right() - 1.5, r.top() + 5.5));
+    p.drawLine(QPointF(r.right() - 4.5, r.top() + 9.5), QPointF(r.right() - 1.5, r.top() + 9.5));
+    p.drawLine(QPointF(r.right() - 4.5, r.top() + 12.0), QPointF(r.right() - 1.5, r.top() + 13.5));
+}
+
+QIcon makeIcon(const QString& name, int size)
+{
+    QPixmap pm(size, size);
+    pm.fill(Qt::transparent);
+
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, false);
+
+    const QRectF r(1.5, 1.5, size - 3.0, size - 3.0);
+
+    if (name == QLatin1String("new")) {
+        drawPage(p, r);
+    } else if (name == QLatin1String("open")) {
+        drawFolderShape(p, r);
+    } else if (name == QLatin1String("save")) {
+        p.setPen(QPen(QColor(0x33, 0x33, 0x33), 1));
+        p.setBrush(kBlue);
+        p.drawRect(r);
+        p.setBrush(kPage);
+        p.drawRect(QRectF(r.left() + 2, r.top() + 1, r.width() - 4, 4));
+        p.drawRect(QRectF(r.left() + 2, r.center().y() + 1, r.width() - 4, r.height() * 0.4));
+    } else if (name == QLatin1String("saveall")) {
+        p.setPen(QPen(QColor(0x33, 0x33, 0x33), 1));
+        p.setBrush(QColor(0xd8, 0xd8, 0xd8));
+        p.drawRect(r.adjusted(2, 2, 0, 0));
+        p.setBrush(kBlue);
+        p.drawRect(r.adjusted(0, 0, -2, -2));
+        p.setBrush(kPage);
+        p.drawRect(QRectF(r.left() + 1, r.top() + 1, r.width() - 5, 3));
+    } else if (name == QLatin1String("build") || name == QLatin1String("translate")) {
+        drawHammer(p, r);
+    } else if (name == QLatin1String("rebuild")) {
+        drawHammer(p, r);
+        p.setPen(QPen(kRed, 1.4));
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(QRectF(r.right() - 7, r.top(), 6.5, 6.5), 40 * 16, 260 * 16);
+        QPolygonF tip;
+        tip << QPointF(r.right() - 1.5, r.top() + 1.0)
+            << QPointF(r.right() - 4.0, r.top() + 3.0)
+            << QPointF(r.right() - 0.5, r.top() + 4.5);
+        p.setBrush(kRed);
+        p.setPen(QPen(kRed, 0));
+        p.drawPolygon(tip);
+    } else if (name == QLatin1String("stop")) {
+        p.setPen(QPen(kRed.darker(160), 1));
+        p.setBrush(kRed);
+        p.drawRect(r.adjusted(1, 1, -1, -1));
+    } else if (name == QLatin1String("debug_start")) {
+        drawBug(p, r);
+        drawMagnifier(p, r, QColor(0x20, 0x50, 0x90));
+    } else if (name == QLatin1String("run")) {
+        drawTriangle(p, r, kGreen);
+    } else if (name == QLatin1String("debug_stop")) {
+        p.setPen(QPen(QColor(0x33, 0x33, 0x33), 1));
+        p.setBrush(QColor(0x9e, 0x9e, 0x9e));
+        p.drawRect(r.adjusted(1, 1, -1, -1));
+        p.setPen(QPen(kRed, 1.4));
+        p.drawLine(r.topLeft() + QPointF(2, 2), r.bottomRight() - QPointF(2, 2));
+        p.drawLine(r.topRight() + QPointF(-2, 2), r.bottomLeft() + QPointF(2, -2));
+    } else if (name == QLatin1String("step")) {
+        drawTriangle(p, r.adjusted(0, 0, -4, 0), kGreen);
+        p.setPen(QPen(kInk, 2));
+        p.drawLine(QPointF(r.right() - 2, r.top() + 1), QPointF(r.right() - 2, r.bottom() - 1));
+    } else if (name == QLatin1String("stepover")) {
+        drawTriangle(p, r.adjusted(0, 0, -3, 3), kGreen);
+        p.setPen(QPen(kBlue, 1.4));
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(QRectF(r.left() + 5, r.bottom() - 6, 8, 6), 0, 180 * 16);
+        p.drawLine(QPointF(r.right() - 1, r.bottom() - 3), QPointF(r.right() - 1, r.bottom() + 0.5));
+    } else if (name == QLatin1String("stepout")) {
+        drawTriangle(p, r.adjusted(0, 2, -3, -1), kGreen);
+        p.setPen(QPen(kBlue, 1.4));
+        p.drawLine(QPointF(r.right() - 3, r.bottom() - 1), QPointF(r.right() - 3, r.top() + 1));
+        QPolygonF tip;
+        tip << QPointF(r.right() - 6, r.top() + 3) << QPointF(r.right() - 3, r.top() + 0.5)
+            << QPointF(r.right(), r.top() + 3);
+        p.setBrush(kBlue);
+        p.drawPolygon(tip);
+    } else if (name == QLatin1String("runtocursor")) {
+        drawTriangle(p, r.adjusted(0, 0, -2, 0), kGreen);
+        p.setPen(QPen(kRed, 1.4, Qt::DashLine));
+        p.drawLine(QPointF(r.left() + 1, r.bottom() - 1), QPointF(r.right(), r.bottom() - 1));
+    } else if (name == QLatin1String("breakpoint")) {
+        p.setPen(QPen(kRed.darker(170), 1));
+        p.setBrush(kRed);
+        p.drawEllipse(r.adjusted(1.5, 1.5, -1.5, -1.5));
+    } else if (name == QLatin1String("folder")) {
+        drawFolderShape(p, r);
+    } else if (name == QLatin1String("target")) {
+        p.setPen(QPen(QColor(0x55, 0x55, 0x55), 1));
+        p.setBrush(QColor(0xc8, 0xa2, 0x50));
+        p.drawRoundedRect(r.adjusted(0.5, 2.5, -0.5, -1.0), 1.5, 1.5);
+        p.setBrush(QColor(0x3a, 0x3a, 0x3a));
+        for (int i = 0; i < 3; ++i)
+            p.drawRect(QRectF(r.left() + 2.0 + i * 4.0, r.top() + 4.0, 2.0, 2.0));
+        p.drawRect(QRectF(r.left() + 2.0, r.bottom() - 5.5, r.width() - 4.0, 1.6));
+    } else if (name == QLatin1String("file_c")) {
+        drawPage(p, r);
+        drawLetter(p, r, QStringLiteral("C"), QColor(0x1b, 0x4f, 0x9a));
+    } else if (name == QLatin1String("file_cpp")) {
+        drawPage(p, r);
+        drawLetter(p, r, QStringLiteral("C+"), QColor(0x1b, 0x4f, 0x9a));
+    } else if (name == QLatin1String("file_h")) {
+        drawPage(p, r);
+        drawLetter(p, r, QStringLiteral("H"), QColor(0x6a, 0x2d, 0x8a));
+    } else if (name == QLatin1String("file_asm")) {
+        drawPage(p, r);
+        drawLetter(p, r, QStringLiteral("A"), QColor(0x8a, 0x4a, 0x1a));
+    } else if (name == QLatin1String("book")) {
+        p.setPen(QPen(QColor(0x55, 0x3a, 0x1a), 1));
+        p.setBrush(QColor(0xc9, 0x7a, 0x3a));
+        p.drawRect(r.adjusted(1, 0, -1, 0));
+        p.setBrush(Qt::white);
+        p.drawRect(r.adjusted(3, 2, -3, -2));
+    } else {
+        drawPage(p, r);
+    }
+
+    p.end();
+    return QIcon(pm);
+}
+
+} // namespace
+
+namespace KeilStyle {
+
+void apply(QApplication& app)
+{
+#if !defined(Q_OS_WIN)
+    if (QStyle* fusion = QStyleFactory::create(QStringLiteral("Fusion")))
+        app.setStyle(fusion);
+#endif
+    QFont f = app.font();
+    if (f.pointSizeF() < 9.0)
+        f.setPointSizeF(9.0);
+    app.setFont(f);
+}
+
+QFont uiFont()
+{
+    QFont f = QApplication::font();
+    return f;
+}
+
+QFont editorFont()
+{
+#if defined(Q_OS_WIN)
+    QFont f(QStringLiteral("Courier New"), 10);
+    if (!QFontDatabase().families().contains(QStringLiteral("Courier New")))
+        f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+#else
+    QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    f.setPointSizeF(10.0);
+#endif
+    f.setStyleHint(QFont::Monospace);
+    f.setFixedPitch(true);
+    return f;
+}
+
+QIcon icon(const QString& name, int size)
+{
+    static QHash<QString, QIcon> cache;
+    const QString key = name + QLatin1Char('@') + QString::number(size);
+    auto it = cache.constFind(key);
+    if (it != cache.constEnd())
+        return *it;
+    const QIcon ic = makeIcon(name, size);
+    cache.insert(key, ic);
+    return ic;
+}
+
+QPalette palette()
+{
+    return QApplication::palette();
+}
+
+} // namespace KeilStyle
