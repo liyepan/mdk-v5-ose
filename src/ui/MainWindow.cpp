@@ -73,7 +73,7 @@ protected:
     QRect closeRectForTab(int index) const
     {
         const QRect rect = tabRect(index);
-        const int size = 16;
+        const int size = 16;   // 命中区保持 16，视觉叉号单独缩小
         // 往左 3px、往下 2px（离文字远一点、视觉重心略低）
         return QRect(rect.right() - size - 7,
                      rect.top() + (rect.height() - size) / 2 + 2,
@@ -103,13 +103,13 @@ protected:
             // 叉号：中心点 = 自己算的矩形中心
             const QRect cross = closeRectForTab(i);
             const QPointF centre = QRectF(cross).center();
-            const qreal arm = 3.6;
+            const qreal arm = 2.4;      // 原来 3.6，缩小约 2.4px
             QColor ink(0x67, 0x70, 0x7d);
             if (m_hoverCloseTab == i)
                 ink = QColor(0xc0, 0x2a, 0x1e);
 
             painter.setRenderHint(QPainter::Antialiasing, true);
-            painter.setPen(QPen(ink, 1.5, Qt::SolidLine, Qt::RoundCap));
+            painter.setPen(QPen(ink, 1.3, Qt::SolidLine, Qt::RoundCap));
             painter.drawLine(centre + QPointF(-arm, -arm), centre + QPointF(arm, arm));
             painter.drawLine(centre + QPointF(arm, -arm), centre + QPointF(-arm, arm));
             painter.setRenderHint(QPainter::Antialiasing, false);
