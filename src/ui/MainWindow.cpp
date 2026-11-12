@@ -207,6 +207,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     reloadToolchain();
     restoreWindowState();
+    applyToolBarLayout();     // restoreState 可能把工具栏摆回旧布局，这里纠正
     updateWindowTitle();
 
     setBusy(false);
@@ -628,6 +629,8 @@ void MainWindow::createMenus()
 
 void MainWindow::createToolBars()
 {
+    m_toolBars.clear();
+
     // uVision 的布局：三条独立横排、左对齐、每排自己一个拖动柄。
     // 用 addToolBarBreak() 保证每条占一行，而不是挤在同一行里。
     auto makeBar = [this](const QString& title) {
@@ -635,8 +638,10 @@ void MainWindow::createToolBars()
         bar->setObjectName(title + QStringLiteral("Bar"));
         bar->setIconSize(QSize(16, 16));
         bar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        bar->setMovable(true);        // 有拖动柄，和 uVision 一样能挪
+        bar->setMovable(false);       // 固定住：不给拖，也不给浮动
         bar->setFloatable(false);
+        bar->setAllowedAreas(Qt::TopToolBarArea);
+        m_toolBars.append(bar);
         if (bar->layout())
             bar->layout()->setContentsMargins(3, 0, 3, 0);
         addToolBar(bar);
@@ -696,6 +701,27 @@ void MainWindow::createToolBars()
     buildBar->addAction(manage);
 
     populateTargetCombo();
+}
+
+void MainWindow::applyToolBarLayout()
+{
+    if (m_toolBars.isEmpty())
+        return;
+
+    // 先全部摘下来（QMainWindow 的 saveState/restoreState 会把工具栏塞回旧位置，
+    // 包括几次改版之前"三条挤一行"的布局），再按固定顺序两行摆回去
+    for (QToolBar* bar : m_toolBars) {
+        removeToolBarBreak(bar);
+        removeToolBar(bar);
+    }
+
+    for (QToolBar* bar : m_toolBars) {
+        addToolBar(Qt::TopToolBarArea, bar);
+        addToolBarBreak();
+        bar->setVisible(true);
+        bar->setMovable(false);
+        bar->setFloatable(false);
+    }
 }
 
 void MainWindow::createDocks()
@@ -1637,6 +1663,7 @@ void MainWindow::retranslateUi()
         bar->deleteLater();
     }
     createToolBars();
+    applyToolBarLayout();
 
     // 这些 QAction 是成员，语言切换时要手动刷新文本
     auto retitle = [](QAction* action, const QString& text, const QString& tip = QString()) {

@@ -12,6 +12,7 @@ class QAction;
 class QComboBox;
 class QDockWidget;
 class QMenu;
+class QToolBar;
 class QLabel;
 class QTabWidget;
 
@@ -100,6 +101,7 @@ private slots:
 private:
     void createActions();
     void createMainToolbarActions();
+    void applyToolBarLayout();
     void populateSymbolCombo();
     void populateTargetCombo();
     void recordNavigation(const QString& file, int line);
@@ -163,6 +165,7 @@ private:
     };
 
     QList<QAction*> m_mainBarActions;   // nullptr = 分隔线
+    QList<QToolBar*> m_toolBars;
     QComboBox*      m_symbolCombo = nullptr;
     QComboBox*      m_targetCombo = nullptr;
     bool            m_updatingTargets = false;
