@@ -33,6 +33,8 @@
 #include <QLayout>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMouseEvent>
+#include <functional>
 #include <QMessageBox>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -64,7 +66,18 @@ public:
     {
     }
 
+    std::function<void(int)> onCloseClicked;
+
 protected:
+    // 叉号的位置完全自己算，垂直居中；不依赖 QTabBar 的右侧按钮布局
+    QRect closeRectForTab(int index) const
+    {
+        const QRect rect = tabRect(index);
+        const int size = 16;
+        return QRect(rect.right() - size - 4, rect.top() + (rect.height() - size) / 2,
+                     size, size);
+    }
+
     void paintEvent(QPaintEvent* event) override
     {
         QTabBar::paintEvent(event);
@@ -73,20 +86,75 @@ protected:
         painter.setRenderHint(QPainter::Antialiasing, false);
 
         for (int i = 0; i < count(); ++i) {
-            const QColor color = tabData(i).value<QColor>();
-            if (!color.isValid())
-                continue;
-
             const QRect rect = tabRect(i);
             if (!rect.isValid())
                 continue;
 
-            QColor accent = color;
-            accent.setAlpha(i == currentIndex() ? 255 : 110);
-            painter.fillRect(QRect(rect.left() + 7, rect.top() + 1, rect.width() - 14, 3),
-                             accent);
+            const QColor color = tabData(i).value<QColor>();
+            if (color.isValid()) {
+                QColor accent = color;
+                accent.setAlpha(i == currentIndex() ? 255 : 110);
+                painter.fillRect(QRect(rect.left() + 7, rect.top() + 1, rect.width() - 14, 3),
+                                 accent);
+            }
+
+            // 叉号：中心点 = 自己算的矩形中心
+            const QRect cross = closeRectForTab(i);
+            const QPointF centre = QRectF(cross).center();
+            const qreal arm = 3.6;
+            QColor ink(0x67, 0x70, 0x7d);
+            if (m_hoverCloseTab == i)
+                ink = QColor(0xc0, 0x2a, 0x1e);
+
+            painter.setRenderHint(QPainter::Antialiasing, true);
+            painter.setPen(QPen(ink, 1.5, Qt::SolidLine, Qt::RoundCap));
+            painter.drawLine(centre + QPointF(-arm, -arm), centre + QPointF(arm, arm));
+            painter.drawLine(centre + QPointF(arm, -arm), centre + QPointF(-arm, arm));
+            painter.setRenderHint(QPainter::Antialiasing, false);
         }
     }
+
+    void mouseMoveEvent(QMouseEvent* event) override
+    {
+        int hovered = -1;
+        for (int i = 0; i < count(); ++i) {
+            if (closeRectForTab(i).contains(event->pos())) {
+                hovered = i;
+                break;
+            }
+        }
+        if (hovered != m_hoverCloseTab) {
+            m_hoverCloseTab = hovered;
+            update();
+        }
+        QTabBar::mouseMoveEvent(event);
+    }
+
+    void leaveEvent(QEvent* event) override
+    {
+        if (m_hoverCloseTab != -1) {
+            m_hoverCloseTab = -1;
+            update();
+        }
+        QTabBar::leaveEvent(event);
+    }
+
+    void mouseReleaseEvent(QMouseEvent* event) override
+    {
+        if (event->button() == Qt::LeftButton) {
+            for (int i = 0; i < count(); ++i) {
+                if (closeRectForTab(i).contains(event->pos())) {
+                    if (onCloseClicked)
+                        onCloseClicked(i);
+                    return;
+                }
+            }
+        }
+        QTabBar::mouseReleaseEvent(event);
+    }
+
+private:
+    int m_hoverCloseTab = -1;
 };
 
 const char* kTemplateXml = R"XML(<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
@@ -175,7 +243,10 @@ MainWindow::MainWindow(QWidget* parent)
 
     auto* tabs = new FileTabWidget(this);
     m_tabs = tabs;
-    tabs->setTabBar(new FileTabBar(tabs));
+
+    auto* tabBar = new FileTabBar(tabs);
+    tabBar->onCloseClicked = [this](int index) { onTabCloseRequested(index); };
+    tabs->setTabBar(tabBar);
     m_tabs->setIconSize(QSize(12, 12));
     // 用 Qt 自带的关闭按钮（位置由 QTabBar 自己算，天然居中），
     // 图标已经在 AppStyle::standardIcon 里换成我们画的细叉号
@@ -778,33 +849,6 @@ void MainWindow::createStatusBar()
 
 // ---------------------------------------------------------------- 工程
 
-void MainWindow::installTabCloseButton(int index, CodeEditor* editor)
-{
-    // Qt 自带的 CloseButton 在 paintEvent 里画 PE_IndicatorTabClose 图元，
-    // 不读按钮 icon，各种改法都画不出来；换成普通 QToolButton 就正常了
-    auto* button = new QToolButton(m_tabs->tabBar());
-    button->setIcon(KeilStyle::icon(QStringLiteral("close"), 16));
-    button->setIconSize(QSize(12, 12));
-    button->setFixedSize(16, 16);
-    button->setAutoRaise(true);
-    button->setCursor(Qt::ArrowCursor);
-    button->setToolTip(QStringLiteral("Close"));
-    button->setObjectName(QStringLiteral("tabCloseButton"));
-
-    connect(button, &QToolButton::clicked, this, [this, editor]() {
-        QMetaObject::invokeMethod(
-            this,
-            [this, editor]() {
-                const int i = m_tabs->indexOf(editor);
-                if (i >= 0)
-                    onTabCloseRequested(i);
-            },
-            Qt::QueuedConnection);
-    });
-
-    m_tabs->tabBar()->setTabButton(index, QTabBar::RightSide, button);
-}
-
 void MainWindow::onNewFile()
 {
     static int untitledCounter = 0;
@@ -828,7 +872,6 @@ void MainWindow::onNewFile()
     const int index = m_tabs->addTab(editor, QStringLiteral("untitled%1").arg(++untitledCounter));
     m_tabs->setCurrentIndex(index);
     m_tabs->tabBar()->setTabData(index, nextTabColor());
-    installTabCloseButton(index, editor);
     editor->setFocus();
     updateEncodingLabel();
 }
@@ -1056,7 +1099,6 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     if (!m_fileTabColors.contains(abs))
         m_fileTabColors.insert(abs, nextTabColor());
     m_tabs->tabBar()->setTabData(index, m_fileTabColors.value(abs));
-    installTabCloseButton(index, editor);
     m_tabs->setCurrentIndex(index);
     updateEncodingLabel();
 

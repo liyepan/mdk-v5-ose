@@ -575,16 +575,13 @@ QDockWidget::title { background: #eef2f7; color: #333b45; padding: 6px 10px;
 QTabWidget { background: #e9edf2; }
 QTabWidget::pane { background: #ffffff; border: 1px solid #c9d2dc; }
 QTabBar { background: transparent; }
-QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 2px 6px 2px 10px; margin-right: 2px;
+QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 2px 24px 2px 10px; margin-right: 2px;
                border: 1px solid #d8dee6; border-bottom: none;
                border-top-left-radius: 6px; border-top-right-radius: 6px; }
 QTabBar::tab:selected { background: #ffffff; color: #1f2328;
                         border-color: #c9d2dc; border-bottom: none; }
 QTabBar::tab:hover:!selected { background: #e4e9f0; }
-/* 页签上的关闭按钮是我们自己放的 QToolButton，按 objectName 选中 */
-QTabBar QToolButton#tabCloseButton { padding: 0px; margin: 0px; border: none;
-                                     border-radius: 3px; background: transparent; }
-QTabBar QToolButton#tabCloseButton:hover { background: #fbdad8; }
+/* 页签叉号由 FileTabBar::paintEvent 自己画，不需要 close-button 规则 */
 QTabBar QToolButton:hover { background: #fbdad8; }
 QTabBar::close-button { border-radius: 4px; }
 

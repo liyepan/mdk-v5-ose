@@ -120,7 +120,6 @@ private:
     void resetEditorZoom();
 
     QColor nextTabColor();
-    void   installTabCloseButton(int index, CodeEditor* editor);
 
     void revealBuildOutput();
     void formatEditor(CodeEditor* editor);
