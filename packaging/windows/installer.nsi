@@ -13,7 +13,6 @@ Unicode true
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
-!include "FileFunc.nsh"
 
 !ifndef APP_VERSION
   !define APP_VERSION "0.0.0"
@@ -96,8 +95,6 @@ Section "Install"
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
 
-  ${GetSize} "$INSTDIR" "/S=0K" $0
-  WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" $0
 SectionEnd
 
 Section "Uninstall"
