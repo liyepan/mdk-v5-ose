@@ -85,6 +85,7 @@ private:
     void changeEditorZoom(int delta);
     void resetEditorZoom();
 
+    QColor nextTabColor();
     void formatEditor(CodeEditor* editor);
     bool saveEditor(CodeEditor* editor);
     void ensureSymbolIndex();
@@ -107,6 +108,8 @@ private:
     Toolchain   m_toolchain;
     BuildEngine* m_engine = nullptr;
     SymbolIndex m_symbols;
+    QHash<QString, QColor> m_fileTabColors;
+    int         m_tabColorCursor = 0;
 
     ProjectTree* m_projectTree = nullptr;
     BuildOutput* m_buildOutput = nullptr;

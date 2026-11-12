@@ -12,6 +12,9 @@
 
 #include <QAction>
 #include <QActionGroup>
+#include <QPainter>
+#include <QTabBar>
+#include <QToolButton>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDir>
@@ -32,6 +35,52 @@
 #include <QToolButton>
 
 namespace {
+
+// QTabWidget::setTabBar 是 protected，这里暴露出来
+class FileTabWidget : public QTabWidget
+{
+public:
+    explicit FileTabWidget(QWidget* parent = nullptr)
+        : QTabWidget(parent)
+    {
+    }
+
+    using QTabWidget::setTabBar;
+};
+
+// 每个页签顶部一条彩色条，颜色按文件分配，这样一堆标签一眼能分出来
+class FileTabBar : public QTabBar
+{
+public:
+    explicit FileTabBar(QWidget* parent = nullptr)
+        : QTabBar(parent)
+    {
+    }
+
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        QTabBar::paintEvent(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, false);
+
+        for (int i = 0; i < count(); ++i) {
+            const QColor color = tabData(i).value<QColor>();
+            if (!color.isValid())
+                continue;
+
+            const QRect rect = tabRect(i);
+            if (!rect.isValid())
+                continue;
+
+            QColor accent = color;
+            accent.setAlpha(i == currentIndex() ? 255 : 110);
+            painter.fillRect(QRect(rect.left() + 7, rect.top() + 1, rect.width() - 14, 3),
+                             accent);
+        }
+    }
+};
 
 const char* kTemplateXml = R"XML(<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 <Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="project_projx.xsd">
@@ -117,8 +166,11 @@ MainWindow::MainWindow(QWidget* parent)
 {
     setWindowIcon(KeilStyle::icon(QStringLiteral("target"), 32));
 
-    m_tabs = new QTabWidget(this);
-    m_tabs->setTabsClosable(true);
+    auto* tabs = new FileTabWidget(this);
+    m_tabs = tabs;
+    tabs->setTabBar(new FileTabBar(tabs));
+    m_tabs->setIconSize(QSize(12, 12));
+    m_tabs->setTabsClosable(false);   // 关闭按钮自己画，比 Fusion 自带的方块 X 好看
     m_tabs->setMovable(true);
     m_tabs->setDocumentMode(true);
     setCentralWidget(m_tabs);
@@ -687,8 +739,38 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     if (m_editorZoom > 0.0)
         editor->setZoomPointSize(m_editorZoom);
 
+    // Ctrl 悬停时判断这个词能不能跳，能跳才画下划线
+    editor->setSymbolChecker([this](const QString& word) {
+        ensureSymbolIndex();
+        return !m_symbols.lookup(word).isEmpty();
+    });
+
     const int index = m_tabs->addTab(editor, QFileInfo(abs).fileName());
     m_tabs->setTabToolTip(index, abs);
+
+    // 同一个文件始终同一种颜色，新文件取下一种
+    if (!m_fileTabColors.contains(abs))
+        m_fileTabColors.insert(abs, nextTabColor());
+    m_tabs->tabBar()->setTabData(index, m_fileTabColors.value(abs));
+
+    // 自绘关闭按钮：图标是自己的，尺寸也更紧凑
+    auto* closeButton = new QToolButton(m_tabs->tabBar());
+    closeButton->setIcon(KeilStyle::icon(QStringLiteral("close"), 16));
+    closeButton->setIconSize(QSize(12, 12));
+    closeButton->setAutoRaise(true);
+    closeButton->setCursor(Qt::ArrowCursor);
+    closeButton->setToolTip(QStringLiteral("Close"));
+    connect(closeButton, &QToolButton::clicked, this, [this, editor]() {
+        QMetaObject::invokeMethod(
+            this,
+            [this, editor]() {
+                const int idx = m_tabs->indexOf(editor);
+                if (idx >= 0)
+                    onTabCloseRequested(idx);
+            },
+            Qt::QueuedConnection);
+    });
+    m_tabs->tabBar()->setTabButton(index, QTabBar::RightSide, closeButton);
     m_tabs->setCurrentIndex(index);
     updateEncodingLabel();
 
@@ -744,6 +826,17 @@ void MainWindow::onTabCloseRequested(int index)
     m_tabs->removeTab(index);
     if (editor)
         editor->deleteLater();
+}
+
+QColor MainWindow::nextTabColor()
+{
+    static const QColor palette[] = {
+        QColor(0x0b, 0x57, 0xd0), QColor(0x0a, 0x7d, 0x33), QColor(0xa6, 0x26, 0xa4),
+        QColor(0xb3, 0x5c, 0x00), QColor(0x0e, 0x74, 0x90), QColor(0xc2, 0x41, 0x0c),
+        QColor(0x6d, 0x28, 0xd9), QColor(0x15, 0x80, 0x3d)
+    };
+    const int count = int(sizeof(palette) / sizeof(palette[0]));
+    return palette[m_tabColorCursor++ % count];
 }
 
 void MainWindow::onSave()

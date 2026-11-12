@@ -2,6 +2,9 @@
 
 #include <QFont>
 #include <QPlainTextEdit>
+#include <QTextCursor>
+
+#include <functional>
 
 class LineNumberArea;
 
@@ -30,6 +33,9 @@ public:
     void    setEncoding(const QString& name, bool reloadFromDisk = false);
     static QStringList encodingChoices();
 
+    // 判断某个标识符能不能跳转（由主窗口接上符号表）
+    void setSymbolChecker(std::function<bool(const QString&)> checker);
+
     // 字号缩放（高 DPI 屏上真正管用的那个"缩放"）
     void  setZoomPointSize(qreal pointSize);
     qreal zoomPointSize() const { return m_pointSize; }
@@ -52,6 +58,7 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
+    void leaveEvent(QEvent* event) override;
 
 private slots:
     void updateLineNumberAreaWidth(int newBlockCount);
@@ -62,10 +69,14 @@ private slots:
 private:
     void setupContextMenu();
     void applyFont();
+    bool identifierAt(const QTextCursor& cursor, QString* word, int* start, int* end) const;
+    void updateHoverSelection(const QTextCursor& cursor, bool ctrlHeld);
 
     LineNumberArea* m_lineNumberArea = nullptr;
     qreal           m_pointSize = 0.0;
     QString         m_encoding = QStringLiteral("UTF-8");
+    QTextCursor     m_hoverCursor;
+    std::function<bool(const QString&)> m_symbolChecker;
     QString         m_filePath;
     bool            m_assembly = false;
 };

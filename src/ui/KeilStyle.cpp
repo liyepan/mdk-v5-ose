@@ -7,11 +7,32 @@
 #include <QPainterPath>
 #include <QPixmap>
 #include <QPolygonF>
+#include <QProxyStyle>
 #include <QStyle>
 #include <QStyleFactory>
+#include <QStyleOption>
 #include <QtMath>
 
 namespace {
+
+// 接管页签 / 停靠窗口的关闭按钮图标（QSS 改不了它们，只能走 style）
+class AppStyle : public QProxyStyle
+{
+public:
+    AppStyle()
+        : QProxyStyle(QStringLiteral("Fusion"))
+    {
+    }
+
+    QIcon standardIcon(StandardPixmap which, const QStyleOption* option = nullptr,
+                       const QWidget* widget = nullptr) const override
+    {
+        if (which == SP_TitleBarCloseButton || which == SP_DockWidgetCloseButton) {
+            return KeilStyle::icon(QStringLiteral("close"), 16);
+        }
+        return QProxyStyle::standardIcon(which, option, widget);
+    }
+};
 
 const QColor kInk(0x3c, 0x3c, 0x3c);
 const QColor kPage(0xff, 0xff, 0xff);
@@ -219,6 +240,13 @@ void paintIcon(QPainter& p, const QString& name, int size)
     } else if (name == QLatin1String("file_asm")) {
         drawPage(p, r);
         drawLetter(p, r, QStringLiteral("A"), QColor(0x8a, 0x4a, 0x1a));
+    } else if (name == QLatin1String("close")) {
+        // 细一点的圆头叉号，比 Fusion 自带的方块 X 好看
+        QPen pen(QColor(0x7b, 0x84, 0x91), 1.5, Qt::SolidLine, Qt::RoundCap);
+        p.setPen(pen);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.drawLine(QPointF(5.0, 5.0), QPointF(11.0, 11.0));
+        p.drawLine(QPointF(11.0, 5.0), QPointF(5.0, 11.0));
     } else if (name == QLatin1String("book")) {
         p.setPen(QPen(QColor(0x55, 0x3a, 0x1a), 1));
         p.setBrush(QColor(0xc9, 0x7a, 0x3a));
@@ -298,12 +326,15 @@ QDockWidget::title { background: #eef2f7; color: #333b45; padding: 6px 10px;
 QTabWidget { background: #e9edf2; }
 QTabWidget::pane { background: #ffffff; border: 1px solid #c9d2dc; }
 QTabBar { background: transparent; }
-QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 7px 16px; margin-right: 2px;
+QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 2px 12px 2px 10px; margin-right: 2px;
                border: 1px solid #d8dee6; border-bottom: none;
-               border-top-left-radius: 7px; border-top-right-radius: 7px; }
-QTabBar::tab:selected { background: #ffffff; color: #0b57d0;
-                        border-color: #c9d2dc; border-bottom: 2px solid #0b57d0; }
+               border-top-left-radius: 6px; border-top-right-radius: 6px; min-height: 18px; }
+QTabBar::tab:selected { background: #ffffff; color: #1f2328;
+                        border-color: #c9d2dc; border-bottom: none; }
 QTabBar::tab:hover:!selected { background: #e4e9f0; }
+QTabBar QToolButton { padding: 0px; border: none; border-radius: 4px; margin-left: 6px; }
+QTabBar QToolButton:hover { background: #fbdad8; }
+QTabBar::close-button { border-radius: 4px; }
 
 /* ---------- 树 / 表格：独立白块，带边框 ---------- */
 QTreeWidget, QTreeView, QListView, QTableView { background: #ffffff;
@@ -357,9 +388,9 @@ QToolTip { background: #1f2937; color: #f9fafb; border: none; padding: 4px 6px; 
 
 void apply(QApplication& app)
 {
-    // 统一用 Fusion 打底：QSS 在 Windows 的 vista 样式上会花得厉害
-    if (QStyle* fusion = QStyleFactory::create(QStringLiteral("Fusion")))
-        app.setStyle(fusion);
+    // 统一用 Fusion 打底：QSS 在 Windows 的 vista 样式上会花得厉害。
+    // 外面再包一层 AppStyle，用来换掉标准图标（关闭按钮等）。
+    app.setStyle(new AppStyle);
 
 #if defined(Q_OS_WIN)
     QFont f(QStringLiteral("Segoe UI"));

@@ -80,6 +80,9 @@ CodeEditor::CodeEditor(QWidget* parent)
 
     m_pointSize = KeilStyle::editorFont().pointSizeF();
     applyFont();
+
+    // 没有鼠标跟踪就不会收到"没按键的移动"，Ctrl 悬停效果也就出不来
+    viewport()->setMouseTracking(true);
     setLineWrapMode(QPlainTextEdit::NoWrap);
     setWordWrapMode(QTextOption::NoWrap);
 
@@ -182,14 +185,83 @@ void CodeEditor::mousePressEvent(QMouseEvent* event)
     QPlainTextEdit::mousePressEvent(event);
 }
 
-void CodeEditor::mouseMoveEvent(QMouseEvent* event)
+bool CodeEditor::identifierAt(const QTextCursor& cursor, QString* word, int* start,
+                              int* end) const
 {
-    if (event->modifiers() & Qt::ControlModifier)
+    static const QRegularExpression identifierRe(QStringLiteral("[A-Za-z_][A-Za-z0-9_]*"));
+
+    const QString line = cursor.block().text();
+    const int column = cursor.positionInBlock();
+
+    QRegularExpressionMatchIterator it = identifierRe.globalMatch(line);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch m = it.next();
+        if (column >= m.capturedStart() && column <= m.capturedEnd()) {
+            if (word)
+                *word = m.captured();
+            if (start)
+                *start = m.capturedStart();
+            if (end)
+                *end = m.capturedEnd();
+            return true;
+        }
+    }
+    return false;
+}
+
+void CodeEditor::setSymbolChecker(std::function<bool(const QString&)> checker)
+{
+    m_symbolChecker = std::move(checker);
+}
+
+void CodeEditor::updateHoverSelection(const QTextCursor& cursor, bool ctrlHeld)
+{
+    QTextCursor hover;
+
+    if (ctrlHeld && !m_filePath.isEmpty()) {
+        QString word;
+        int start = 0;
+        int end = 0;
+        if (identifierAt(cursor, &word, &start, &end)) {
+            const bool known = !m_symbolChecker || m_symbolChecker(word);
+            if (known) {
+                hover = cursor;
+                hover.setPosition(cursor.block().position() + start);
+                hover.setPosition(cursor.block().position() + end, QTextCursor::KeepAnchor);
+            }
+        }
+    }
+
+    const bool changed = hover.hasSelection() != m_hoverCursor.hasSelection()
+                         || hover.anchor() != m_hoverCursor.anchor()
+                         || hover.position() != m_hoverCursor.position();
+    if (!changed)
+        return;
+
+    m_hoverCursor = hover;
+
+    if (m_hoverCursor.hasSelection())
         viewport()->setCursor(Qt::PointingHandCursor);
     else
         viewport()->unsetCursor();
 
+    highlightCurrentLine();      // 里面会把 hover 下划线一起重建
+}
+
+void CodeEditor::mouseMoveEvent(QMouseEvent* event)
+{
+    if (event->modifiers() & Qt::ControlModifier)
+        updateHoverSelection(cursorForPosition(event->pos()), true);
+    else
+        updateHoverSelection(QTextCursor(), false);
+
     QPlainTextEdit::mouseMoveEvent(event);
+}
+
+void CodeEditor::leaveEvent(QEvent* event)
+{
+    updateHoverSelection(QTextCursor(), false);
+    QPlainTextEdit::leaveEvent(event);
 }
 
 void CodeEditor::wheelEvent(QWheelEvent* event)
@@ -395,6 +467,7 @@ void CodeEditor::resizeEvent(QResizeEvent* event)
 void CodeEditor::highlightCurrentLine()
 {
     QList<QTextEdit::ExtraSelection> selections;
+
     if (!isReadOnly()) {
         QTextEdit::ExtraSelection selection;
         selection.format.setBackground(QColor(0xf2, 0xf7, 0xff));
@@ -403,6 +476,16 @@ void CodeEditor::highlightCurrentLine()
         selection.cursor.clearSelection();
         selections.append(selection);
     }
+
+    // Ctrl 悬停在可跳转的符号上时加一条下划线
+    if (m_hoverCursor.hasSelection()) {
+        QTextEdit::ExtraSelection hover;
+        hover.format.setUnderlineStyle(QTextCharFormat::SingleUnderline);
+        hover.format.setUnderlineColor(QColor(0x0b, 0x57, 0xd0));
+        hover.cursor = m_hoverCursor;
+        selections.append(hover);
+    }
+
     setExtraSelections(selections);
 }
 
