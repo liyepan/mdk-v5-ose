@@ -8,6 +8,8 @@
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QTextStream>
+#include <QThread>
+#include <QTimer>
 
 namespace {
 
@@ -130,17 +132,28 @@ QByteArray signatureOf(const QStringList& args)
 BuildEngine::BuildEngine(QObject* parent)
     : QObject(parent)
 {
+    // 默认按 CPU 核数并行；1 就是原来的串行行为
+    setJobs(QThread::idealThreadCount());
+}
+
+void BuildEngine::setJobs(int jobs)
+{
+    m_jobLimit = qBound(1, jobs, 64);
+    m_bufferedOutput = (m_jobLimit > 1);
 }
 
 BuildEngine::~BuildEngine()
 {
-    if (m_proc) {
-        m_proc->disconnect(this);
-        m_proc->kill();
-        m_proc->waitForFinished(1000);
-        delete m_proc;
-        m_proc = nullptr;
+    for (ActiveJob* active : m_active) {
+        if (!active->proc)
+            continue;
+        active->proc->disconnect(this);
+        active->proc->kill();
+        active->proc->waitForFinished(1000);
+        delete active->proc;
+        active->proc = nullptr;
     }
+    m_active.clear();
 }
 
 void BuildEngine::setToolchain(const Toolchain& tc)
@@ -534,10 +547,13 @@ void BuildEngine::resetRun(Mode mode)
 {
     m_mode = mode;
     m_jobs.clear();
+    m_active.clear();
+    m_nextIndex = 0;
+    m_totalCompile = 0;
+    m_doneCompile = 0;
     m_errors = 0;
     m_warnings = 0;
     m_cancelled = false;
-    m_buffer.clear();
     m_running = true;
     m_timer.start();
     m_axfForSize.clear();
@@ -589,7 +605,7 @@ void BuildEngine::build(bool rebuildAll)
 
     resetRun(Mode::Build);
     prepareBuild(rebuildAll);
-    startNext();
+    startJobs();
 }
 
 void BuildEngine::translate(const QString& absoluteFilePath)
@@ -604,7 +620,7 @@ void BuildEngine::translate(const QString& absoluteFilePath)
 
     resetRun(Mode::Translate);
     prepareTranslate(absoluteFilePath);
-    startNext();
+    startJobs();
 }
 
 void BuildEngine::clean()
@@ -675,7 +691,6 @@ void BuildEngine::prepareBuild(bool rebuildAll)
             if (!QFileInfo::exists(src)) {
                 emit output(QStringLiteral("*** Error: 找不到源文件 \"%1\"").arg(native(src)));
                 ++m_errors;
-                ++m_jobErrorDiagnostics;
                 continue;
             }
 
@@ -692,6 +707,7 @@ void BuildEngine::prepareBuild(bool rebuildAll)
             objects << native(obj);
 
             Job job;
+            job.parallel = true;      // 编译/汇编之间没有依赖，可以并行
             if (kind == FileKind::Assembly) {
                 job.program = m_toolchain.as;
                 job.args = assembleArgs(g, f, src, obj);
@@ -726,6 +742,8 @@ void BuildEngine::prepareBuild(bool rebuildAll)
             enqueue(job);
         }
     }
+
+    m_totalCompile = compiled;
 
     if (total == 0)
         emit output(QStringLiteral("*** Warning: 这个 Target 没有任何参与编译的源文件"));
@@ -845,152 +863,236 @@ void BuildEngine::prepareClean()
     emit output(QStringLiteral("Clean finished."));
 }
 
-void BuildEngine::startNext()
+// ---------------------------------------------------------------- 执行器
+
+void BuildEngine::startJobs()
 {
     if (m_cancelled) {
         finishRun(false);
         return;
     }
 
-    while (!m_jobs.isEmpty()) {
-        const Job job = m_jobs.takeFirst();
+    while (m_nextIndex < m_jobs.size()) {
+        const Job job = m_jobs.at(m_nextIndex);
+
+        if (job.parallel) {
+            if (m_active.size() >= m_jobLimit)
+                return;                       // 并行额度用满
+        } else if (!m_active.isEmpty()) {
+            return;                           // 串行任务必须等并行批次收尾
+        }
+
+        ++m_nextIndex;
 
         if (job.skipIfErrors && m_errors > 0) {
+            // 编译已经失败，链接 / hex / AfterMake 都不用跑了
             m_jobs.clear();
-            finishRun(false);
+            m_nextIndex = 0;
+            if (m_active.isEmpty())
+                finishRun(false);
             return;
         }
 
-        if (!job.title.isEmpty())
-            emit output(job.title);
+        launch(job);
+    }
 
-        if (job.program.isEmpty()) {
-            emit output(QStringLiteral("*** Error: 程序路径为空（armlink / armar / 用户命令？）"));
-            ++m_errors;
-            continue;
-        }
+    if (m_active.isEmpty())
+        finishRun(m_errors == 0);
+}
 
-        m_proc = new QProcess(this);
-        m_proc->setWorkingDirectory(projectDir());
-        m_proc->setProcessChannelMode(QProcess::MergedChannels);
-        m_proc->setProgram(resolveProgram(job.program, m_toolchain.binDir));
-        m_proc->setArguments(job.args);
-
-        // 让 fromelf.exe 之类能在 PATH 里找到
-        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-        if (!m_toolchain.binDir.isEmpty()) {
-            const QString path = env.value(QStringLiteral("PATH"));
-            env.insert(QStringLiteral("PATH"),
-                       m_toolchain.binDir + QDir::listSeparator() + path);
-        }
-        m_proc->setProcessEnvironment(env);
-
-        m_jobErrorDiagnostics = 0;
-
-        // 程序不存在时 QProcess 只发 errorOccurred，不发 finished，
-        // 不处理就会把整个任务队列卡死。
-        connect(m_proc, &QProcess::errorOccurred, this,
-                [this, job](QProcess::ProcessError e) {
-                    if (e != QProcess::FailedToStart || !m_proc)
-                        return;
-                    emit output(QStringLiteral("*** Error: 无法启动 \"%1\"（找不到可执行文件？）")
-                                    .arg(job.program));
-                    ++m_errors;
-                    m_proc->deleteLater();
-                    m_proc = nullptr;
-                    startNext();
-                });
-
-        connect(m_proc, &QProcess::readyRead, this, &BuildEngine::pumpOutput);
-        connect(m_proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                this, [this, job](int code, QProcess::ExitStatus status) {
-                    if (m_proc) {
-                        m_buffer += m_proc->readAll();
-                        pumpOutput();
-                    }
-                    if (!m_buffer.isEmpty()) {
-                        handleLine(QString::fromLocal8Bit(m_buffer));
-                        m_buffer.clear();
-                    }
-
-                    const bool ok = (status == QProcess::NormalExit && code == 0);
-                    if (!ok) {
-                        if (job.isHook) {
-                            if (job.hookStopsOnError) {
-                                ++m_errors;
-                                emit output(QStringLiteral("*** 用户命令失败: %1")
-                                                .arg(job.hookCommand));
-                            } else {
-                                ++m_warnings;
-                                emit output(QStringLiteral("*** 用户命令返回 %1（已忽略）: %2")
-                                                .arg(code).arg(job.hookCommand));
-                            }
-                        } else {
-                            // 编译器自己打过 Error 行时不要重复计数
-                            if (m_jobErrorDiagnostics == 0)
-                                ++m_errors;
-                            if (job.isLink)
-                                emit output(QStringLiteral("*** 链接失败"));
-                        }
-                    } else if (job.isLink && !m_axfForSize.isEmpty()
-                               && QFileInfo::exists(m_axfForSize)) {
-                        emitProgramSize();
-                    }
-
-                    if (m_proc) {
-                        m_proc->deleteLater();
-                        m_proc = nullptr;
-                    }
-
-                    startNext();
-                });
-
-        m_proc->start();
+void BuildEngine::launch(const Job& job)
+{
+    if (job.program.isEmpty()) {
+        emit output(QStringLiteral("*** Error: 程序路径为空（armlink / armar / 用户命令？）"));
+        ++m_errors;
         return;
     }
 
-    finishRun(m_errors == 0);
+    auto* active = new ActiveJob(this);
+    active->job = job;
+
+    auto* proc = new QProcess(this);
+    active->proc = proc;
+    proc->setWorkingDirectory(projectDir());
+    proc->setProcessChannelMode(QProcess::MergedChannels);
+    proc->setProgram(resolveProgram(job.program, m_toolchain.binDir));
+    proc->setArguments(job.args);
+
+    // 让 fromelf.exe 之类能在 PATH 里找到
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    if (!m_toolchain.binDir.isEmpty()) {
+        const QString path = env.value(QStringLiteral("PATH"));
+        env.insert(QStringLiteral("PATH"), m_toolchain.binDir + QDir::listSeparator() + path);
+    }
+    proc->setProcessEnvironment(env);
+
+    // 串行模式下标题立刻打出来，用户能马上看到进度；
+    // 并行模式下标题跟着这一条命令的输出一起成块输出，避免交错。
+    if (!m_bufferedOutput && !job.title.isEmpty())
+        emit output(job.title);
+
+    m_active.append(active);
+
+    connect(proc, &QProcess::readyRead, this, [this, active]() { pumpOutput(active); });
+
+    // 程序不存在时 QProcess 只发 errorOccurred，不发 finished，
+    // 不处理就会把整个任务队列卡死。
+    connect(proc, &QProcess::errorOccurred, this, [this, active](QProcess::ProcessError e) {
+        if (e != QProcess::FailedToStart || active->handled)
+            return;
+        emit output(QStringLiteral("*** Error: 无法启动 \"%1\"（找不到可执行文件？）")
+                        .arg(active->job.program));
+        ++m_errors;
+        active->handled = true;
+        removeActive(active);
+        startJobs();
+    });
+
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+            [this, active](int code, QProcess::ExitStatus status) {
+                if (active->handled) {
+                    // 取消流程：只需要把活跃表清干净
+                    removeActive(active);
+                    if (m_active.isEmpty() && m_cancelled)
+                        finishRun(false);
+                    return;
+                }
+                onJobFinished(active, code, static_cast<int>(status));
+            });
+
+    proc->start();
 }
 
-void BuildEngine::pumpOutput()
+void BuildEngine::appendLine(ActiveJob* active, const QString& line)
 {
-    if (!m_proc)
+    if (m_bufferedOutput && active)
+        active->lines.append(line);
+    else
+        emit output(line);
+}
+
+void BuildEngine::pumpOutput(ActiveJob* active)
+{
+    if (!active || !active->proc)
         return;
 
-    m_buffer += m_proc->readAll();
+    active->buffer += active->proc->readAll();
 
     int idx = 0;
-    while ((idx = m_buffer.indexOf('\n')) >= 0) {
-        QByteArray line = m_buffer.left(idx);
-        m_buffer.remove(0, idx + 1);
+    while ((idx = active->buffer.indexOf('\n')) >= 0) {
+        QByteArray line = active->buffer.left(idx);
+        active->buffer.remove(0, idx + 1);
         if (line.endsWith('\r'))
             line.chop(1);
-        handleLine(QString::fromLocal8Bit(line));
+        handleLine(active, QString::fromLocal8Bit(line));
     }
 
-    if (m_buffer.size() > (1 << 20)) {
-        handleLine(QString::fromLocal8Bit(m_buffer));
-        m_buffer.clear();
+    if (active->buffer.size() > (1 << 20)) {
+        handleLine(active, QString::fromLocal8Bit(active->buffer));
+        active->buffer.clear();
     }
 }
 
-void BuildEngine::handleLine(const QString& line)
+void BuildEngine::handleLine(ActiveJob* active, const QString& line)
 {
     if (line.isEmpty())
         return;
 
-    emit output(line);
+    appendLine(active, line);
 
     Diagnostic d;
     if (Diagnostics::parseLine(line, projectDir(), &d)) {
         if (d.severity == Severity::Error) {
             ++m_errors;
-            ++m_jobErrorDiagnostics;
+            if (active)
+                ++active->errorDiagnostics;
         } else if (d.severity == Severity::Warning) {
             ++m_warnings;
         }
         emit diagnostic(d);
     }
+}
+
+void BuildEngine::onJobFinished(ActiveJob* active, int exitCode, int exitStatus)
+{
+    const Job job = active->job;
+
+    // 并行模式下标题和这条命令的输出一起成块吐出，
+    // 必须在任何 flush 之前塞进去，否则会出现 "Program Size" 跑到 "linking..." 前面。
+    if (m_bufferedOutput && !job.title.isEmpty())
+        active->lines.prepend(job.title);
+
+    if (active->proc) {
+        active->buffer += active->proc->readAll();
+        pumpOutput(active);
+    }
+    if (!active->buffer.isEmpty()) {
+        handleLine(active, QString::fromLocal8Bit(active->buffer));
+        active->buffer.clear();
+    }
+
+    const bool ok = (exitCode == 0 && exitStatus == static_cast<int>(QProcess::NormalExit));
+
+    if (!ok) {
+        if (job.isHook) {
+            if (job.hookStopsOnError) {
+                ++m_errors;
+                appendLine(active, QStringLiteral("*** 用户命令失败: %1").arg(job.hookCommand));
+            } else {
+                ++m_warnings;
+                appendLine(active, QStringLiteral("*** 用户命令返回 %1（已忽略）: %2")
+                                       .arg(exitCode).arg(job.hookCommand));
+            }
+        } else {
+            // 编译器自己打过 Error 行时不要重复计数
+            if (active->errorDiagnostics == 0) {
+                ++m_errors;
+                appendLine(active, QStringLiteral("*** %1 失败（退出码 %2）")
+                                       .arg(job.isLink ? QStringLiteral("链接")
+                                                       : QStringLiteral("编译命令"))
+                                       .arg(exitCode));
+            }
+            if (job.isLink)
+                appendLine(active, QStringLiteral("*** 链接失败"));
+        }
+    } else if (job.isLink && !m_axfForSize.isEmpty() && QFileInfo::exists(m_axfForSize)) {
+        flushActive(active);      // 先把链接日志放出来，Program Size 再跟上
+        emitProgramSize();
+    }
+
+    flushActive(active);
+
+    if (!job.isLink && !job.isHook) {
+        ++m_doneCompile;
+        emit status(QStringLiteral("compiling %1/%2").arg(m_doneCompile).arg(m_totalCompile));
+    }
+
+    removeActive(active);
+    startJobs();
+}
+
+void BuildEngine::flushActive(ActiveJob* active)
+{
+    if (!active)
+        return;
+    for (const QString& line : active->lines)
+        emit output(line);
+    active->lines.clear();
+}
+
+void BuildEngine::removeActive(ActiveJob* active)
+{
+    if (!active)
+        return;
+
+    m_active.removeAll(active);
+
+    if (active->proc) {
+        active->proc->disconnect(this);
+        active->proc->deleteLater();
+        active->proc = nullptr;
+    }
+    active->deleteLater();
 }
 
 void BuildEngine::emitProgramSize()
@@ -1052,6 +1154,9 @@ void BuildEngine::finishRun(bool success)
     m_running = false;
     saveSignatures();
 
+    m_jobs.clear();
+    m_nextIndex = 0;
+
     if (m_mode == Mode::Build || m_mode == Mode::Translate) {
         const Target* t = currentTarget();
         const QString name = t ? t->artifactName() : QStringLiteral("Project");
@@ -1077,9 +1182,43 @@ void BuildEngine::finishRun(bool success)
 
 void BuildEngine::cancel()
 {
+    if (!m_running)
+        return;
+
     m_cancelled = true;
     m_jobs.clear();
-    if (m_proc)
-        m_proc->kill();
+    m_nextIndex = 0;
+
     emit output(QStringLiteral("*** 构建已取消"));
+
+    if (m_active.isEmpty()) {
+        finishRun(false);
+        return;
+    }
+
+    const QList<ActiveJob*> snapshot = m_active;
+    for (ActiveJob* active : snapshot) {
+        active->handled = true;
+        if (active->proc)
+            active->proc->kill();
+    }
+
+    // kill 之后一定会收到 finished，正常情况下上面那个分支就收尾了。
+    // 万一有进程赖着不发信号，3 秒后强制清场。
+    QTimer::singleShot(3000, this, [this]() {
+        if (!m_running || !m_cancelled)
+            return;
+        const QList<ActiveJob*> still = m_active;
+        for (ActiveJob* active : still) {
+            if (active->proc) {
+                active->proc->disconnect(this);
+                active->proc->kill();
+                active->proc->waitForFinished(500);
+            }
+            active->handled = true;
+            active->deleteLater();
+        }
+        m_active.clear();
+        finishRun(false);
+    });
 }

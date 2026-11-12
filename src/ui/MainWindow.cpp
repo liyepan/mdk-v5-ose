@@ -130,8 +130,13 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_engine, &BuildEngine::output, this, &MainWindow::onEngineOutput);
     connect(m_engine, &BuildEngine::diagnostic, this, &MainWindow::onEngineDiagnostic);
     connect(m_engine, &BuildEngine::finished, this, &MainWindow::onEngineFinished);
+    connect(m_engine, &BuildEngine::status, this, [this](const QString& text) {
+        m_statusMessage->setText(text);
+    });
 
     connect(m_tabs, &QTabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
+
+    m_engine->setJobs(Settings::instance().buildJobs());
 
     reloadToolchain();
     restoreWindowState();

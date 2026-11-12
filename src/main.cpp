@@ -23,6 +23,7 @@ struct CliOptions
     QString toolchainDir;
     QString screenshot;
     int     target = 0;
+    int     jobs = 0;      // 0 = 用默认并行度
 };
 
 CliOptions parseArgs(const QStringList& args)
@@ -45,6 +46,9 @@ CliOptions parseArgs(const QStringList& args)
         } else if (a == QLatin1String("--target")) {
             if (i + 1 < args.size())
                 opt.target = args.at(++i).toInt();
+        } else if (a == QLatin1String("--jobs") || a == QLatin1String("-j")) {
+            if (i + 1 < args.size())
+                opt.jobs = args.at(++i).toInt();
         } else if (!a.startsWith(QLatin1String("--")) && opt.project.isEmpty()) {
             opt.project = a;
         }
@@ -77,6 +81,8 @@ int runHeadlessBuild(const CliOptions& opt, int argc, char* argv[])
 
     BuildEngine engine;
     engine.setToolchain(tc);
+    if (opt.jobs > 0)
+        engine.setJobs(opt.jobs);
     engine.setProject(project, qBound(0, opt.target, project.targets.size() - 1));
 
     int exitCode = 1;

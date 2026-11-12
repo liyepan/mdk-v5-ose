@@ -2,12 +2,14 @@
 
 #include <QFileInfo>
 #include <QSettings>
+#include <QThread>
 
 namespace {
 const char* kToolchainDir  = "toolchain/dir";
 const char* kToolchainFam  = "toolchain/family";
 const char* kLastProject   = "project/last";
 const char* kRecent        = "project/recent";
+const char* kBuildJobs     = "build/jobs";
 const char* kGeometry      = "window/geometry";
 const char* kState         = "window/state";
 }
@@ -42,6 +44,18 @@ QString Settings::toolchainFamily() const
 void Settings::setToolchainFamily(const QString& family)
 {
     m_s.setValue(QLatin1String(kToolchainFam), family);
+}
+
+int Settings::buildJobs() const
+{
+    const int fallback = qBound(1, QThread::idealThreadCount(), 16);
+    const int value = m_s.value(QLatin1String(kBuildJobs), fallback).toInt();
+    return qBound(1, value, 64);
+}
+
+void Settings::setBuildJobs(int jobs)
+{
+    m_s.setValue(QLatin1String(kBuildJobs), qBound(1, jobs, 64));
 }
 
 QString Settings::lastProject() const

@@ -38,13 +38,34 @@
 | 产物 | .axf / .hex / .bin / .lib，Program Size 从 armlink map 的 Grand Totals 解析 |
 | 诊断 | armcc / gcc / armlink 三种格式，Error List 双击跳转，计数不重复 |
 | 缺文件 | 源文件不存在时明确报错并继续，而不是抛一个看不懂的链接错误 |
+| 并行编译 | 编译/汇编按 -j N 并行，链接、armar、hex、用户命令严格串行 |
+
+## 并行编译
+
+编译和汇编阶段并行执行，默认取 CPU 核数（ini 里的 build/jobs，命令行 -j 覆盖）。
+
+执行顺序是分阶段的，不是把整条队列丢进线程池：
+
+    [BeforeCompile 用户命令]  串行
+    [编译 / 汇编]             并行 -j N
+    [BeforeMake 用户命令]     串行
+    [链接 或 armar]           串行
+    [fromelf 生成 hex]        串行
+    [AfterMake 用户命令]      串行
+
+串行任务必须等并行批次全部收尾才开始，所以链接一定拿到完整的 .o 集合。
+
+输出在 -j>1 时按文件成块：一个源文件的 "compiling x.c..." 和它的告警/错误一起吐出，
+不会出现 A 的标题下面跟着 B 的告警。状态栏显示 compiling 12/80 的进度。
+
+实测（6 个各睡 0.5s 的假编译器）：-j1 3.6s，-j6 1.0s。
 
 ## 其它已实现
 
 - 解析 .uvprojx（多 Target / Group / File / C-C++ / Linker / 钩子），写回时原地改 DOM
 - 工程树、Target 切换、双击打开源文件、语法高亮、行号、当前行高亮
 - Options for Target：Output / C/C++ / Linker 三页可回写工程
-- 命令行：--build <uvprojx> [--toolchain <dir>] [--target <index>] [--rebuild]，可进 CI
+- 命令行：--build <uvprojx> [--toolchain <dir>] [--target <index>] [--rebuild] [-j N]，可进 CI
 - --screenshot <png>：离屏渲染一张界面图，便于验证
 
 ## 未实现

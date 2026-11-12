@@ -22,6 +22,11 @@ public:
     QString toolchainFamily() const;
     void setToolchainFamily(const QString& family);
 
+    // ---- 构建 ----
+    // 并行编译任务数，默认取 CPU 核数；1 表示串行
+    int  buildJobs() const;
+    void setBuildJobs(int jobs);
+
     // ---- 最近打开的工程 ----
     QString lastProject() const;
     void setLastProject(const QString& path);
