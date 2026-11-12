@@ -1,4 +1,4 @@
-; uVision5-OSE 安装包脚本（NSIS 3.x / Unicode）
+﻿; uVision5-OSE 安装包脚本（NSIS 3.x / Unicode）
 ;
 ; CI 会传进来：
 ;   /DAPP_VERSION   版本号，例如 0.2.0
@@ -42,7 +42,6 @@ InstallDir "$PROGRAMFILES64\${APP_NAME}"
 InstallDirRegKey HKLM "${APP_REGKEY}" "InstallDir"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
-SetRegView 64
 
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
@@ -64,6 +63,7 @@ SetRegView 64
 !insertmacro MUI_LANGUAGE "English"
 
 Section "Install"
+  SetRegView 64          ; 只能写在 Section / Function 里
   SetOutPath "$INSTDIR"
   File /r "${DEPLOY_DIR}\*.*"
 
@@ -83,7 +83,7 @@ Section "Install"
   ; 关联 .uvprojx：只登记 OpenWithProgids，不抢默认程序（Keil 还是默认打开）
   WriteRegStr HKLM "Software\Classes\${APP_PROGID}" "" "uVision 工程文件"
   WriteRegStr HKLM "Software\Classes\${APP_PROGID}\DefaultIcon" "" "$INSTDIR\${APP_EXE},0"
-  WriteRegStr HKLM "Software\Classes\${APP_PROGID}\shell\open\command" "" '"$INSTDIR\${APP_EXE}" "%%1"'
+  WriteRegStr HKLM "Software\Classes\${APP_PROGID}\shell\open\command" "" '"$INSTDIR\${APP_EXE}" "%1"'
   WriteRegStr HKLM "Software\Classes\${APP_EXT}\OpenWithProgids" "${APP_PROGID}" ""
 
   ; 控制面板卸载项
@@ -97,11 +97,11 @@ Section "Install"
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
 
   ${GetSize} "$INSTDIR" "/S=0K" $0
-  IntFmt $0 "$u" $0
   WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" $0
 SectionEnd
 
 Section "Uninstall"
+  SetRegView 64
   ; 先删文件，再删目录（Qt 的 plugins 子目录也要一起清）
   RMDir /r "$INSTDIR"
 
