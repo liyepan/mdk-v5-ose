@@ -103,13 +103,18 @@ protected:
             // 叉号：中心点 = 自己算的矩形中心
             const QRect cross = closeRectForTab(i);
             const QPointF centre = QRectF(cross).center();
-            const qreal arm = 2.4;      // 原来 3.6，缩小约 2.4px
+
+            // 尺寸跟页签高度走：页面变高（换字号/放大）时叉号按比例变大，
+            // 而不是写死一个像素值。26px 的页签下 arm≈2.9，画出来约 7x7。
+            const qreal height = rect.height();
+            const qreal arm = qMax(2.9, height * 0.13);
+            const qreal penWidth = qMax(1.2, height * 0.05);
             QColor ink(0x67, 0x70, 0x7d);
             if (m_hoverCloseTab == i)
                 ink = QColor(0xc0, 0x2a, 0x1e);
 
             painter.setRenderHint(QPainter::Antialiasing, true);
-            painter.setPen(QPen(ink, 1.3, Qt::SolidLine, Qt::RoundCap));
+            painter.setPen(QPen(ink, penWidth, Qt::SolidLine, Qt::RoundCap));
             painter.drawLine(centre + QPointF(-arm, -arm), centre + QPointF(arm, arm));
             painter.drawLine(centre + QPointF(arm, -arm), centre + QPointF(-arm, arm));
             painter.setRenderHint(QPainter::Antialiasing, false);
