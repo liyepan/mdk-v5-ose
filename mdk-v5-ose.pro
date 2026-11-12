@@ -52,5 +52,10 @@ HEADERS += \
 # MSVC 默认按系统 ANSI 代码页读源文件，源码里有中文，必须显式指定 UTF-8
 msvc: QMAKE_CXXFLAGS += /utf-8
 
-# PerMonitorV2 的 DPI 清单
+# PerMonitorV2 的 DPI 清单（app.rc 里是 1 RT_MANIFEST）
 win32: RC_FILE = resources/app.rc
+
+# 关键：qmake 的 MSVC 默认还会 /MANIFEST:embed 再生成一份，
+# 和 app.rc 里的 RT_MANIFEST 撞成 CVT1100（duplicate resource）。
+# 只保留我们自己的那份。
+win32: CONFIG -= embed_manifest_exe embed_manifest_dll

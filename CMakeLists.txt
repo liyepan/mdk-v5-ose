@@ -73,6 +73,8 @@ target_link_libraries(mdk-v5-ose PRIVATE
 
 if(MSVC)
     target_compile_options(mdk-v5-ose PRIVATE /utf-8 /W3)
+    # 清单由 resources/app.rc 提供；链接器再嵌一份会和它冲突（CVT1100）
+    target_link_options(mdk-v5-ose PRIVATE /MANIFEST:NO)
 endif()
 
 if(WIN32)

@@ -3,6 +3,15 @@
   <assemblyIdentity type="win32" name="linuxacme.mdk.v5.ose"
                     version="0.2.0.0" processorArchitecture="*"/>
 
+  <!-- 现代控件外观；qmake 以前会自动加这条，关掉自动 manifest 后要自己写 -->
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls"
+                        version="6.0.0.0" processorArchitecture="*"
+                        publicKeyToken="6595b64144ccf1df" language="*"/>
+    </dependentAssembly>
+  </dependency>
+
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
       <!-- 老系统读这个 -->
