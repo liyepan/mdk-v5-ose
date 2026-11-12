@@ -547,7 +547,7 @@ QMainWindow::separator:hover { background: #a9b6c4; }
 
 /* ---------- 菜单栏 ---------- */
 QMenuBar { background: #ffffff; border-bottom: 1px solid #d8dee6; padding: 0px; spacing: 0px; }
-QMenuBar::item { background: transparent; padding: 4px 8px; border-radius: 4px; }
+QMenuBar::item { background: transparent; padding: 4px 8px 4px 6px; border-radius: 4px; }
 QMenuBar::item:selected { background: #eef2f7; }
 QMenuBar::item:pressed { background: #e2e8f0; }
 
