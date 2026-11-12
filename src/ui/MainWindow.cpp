@@ -642,8 +642,7 @@ void MainWindow::createToolBars()
         bar->setFloatable(false);
         bar->setAllowedAreas(Qt::TopToolBarArea);
         m_toolBars.append(bar);
-        if (bar->layout())
-            bar->layout()->setContentsMargins(3, 0, 3, 0);
+
         addToolBar(bar);
         addToolBarBreak();
         return bar;
@@ -654,8 +653,11 @@ void MainWindow::createToolBars()
     for (QAction* action : m_mainBarActions) {
         if (action && action == m_symbolComboAnchor) {
             m_symbolCombo = new QComboBox(mainBar);
-            m_symbolCombo->setMinimumWidth(180);
-            m_symbolCombo->setFixedHeight(22);
+            m_symbolCombo->setFixedWidth(170);          // 固定长度，不跟着符号名变长
+            m_symbolCombo->setFixedHeight(20);
+            m_symbolCombo->setEditable(true);           // 空的时候也能显示占位文字
+            m_symbolCombo->setInsertPolicy(QComboBox::NoInsert);
+            m_symbolCombo->lineEdit()->setPlaceholderText(Lang::t("Symbols"));
             m_symbolCombo->setToolTip(Lang::t("Symbols"));
             connect(m_symbolCombo, QOverload<int>::of(&QComboBox::activated),
                     this, &MainWindow::onSymbolChosen);
@@ -680,8 +682,8 @@ void MainWindow::createToolBars()
     buildBar->addSeparator();
 
     m_targetCombo = new QComboBox(buildBar);
-    m_targetCombo->setMinimumWidth(150);
-    m_targetCombo->setFixedHeight(22);
+    m_targetCombo->setFixedWidth(150);
+    m_targetCombo->setFixedHeight(20);
     m_targetCombo->setToolTip(Lang::t("Target"));
     connect(m_targetCombo, QOverload<int>::of(&QComboBox::activated), this,
             &MainWindow::onTargetChanged);

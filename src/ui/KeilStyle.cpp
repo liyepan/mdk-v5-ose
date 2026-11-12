@@ -562,7 +562,8 @@ QLineEdit, QComboBox, QSpinBox { background: #ffffff; border: 1px solid #cfd6df;
                                  border-radius: 6px; padding: 4px 8px; }
 QLineEdit:focus, QComboBox:focus { border-color: #0b57d0; }
 QComboBox::drop-down { border: none; width: 18px; }
-QToolBar QComboBox { padding: 0px 6px; margin: 1px 0px; min-height: 20px; max-height: 22px; }
+QToolBar QComboBox { padding: 0px 4px; margin: 0px; border-radius: 3px; }
+QToolBar QToolButton { padding: 0px; margin: 0px; }
 QPushButton { background: #ffffff; border: 1px solid #cfd6df; border-radius: 6px; padding: 5px 14px; }
 QPushButton:hover { background: #f2f5f9; }
 QPushButton:pressed { background: #e4e9f0; }
