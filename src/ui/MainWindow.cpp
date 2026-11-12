@@ -74,7 +74,9 @@ protected:
     {
         const QRect rect = tabRect(index);
         const int size = 16;
-        return QRect(rect.right() - size - 4, rect.top() + (rect.height() - size) / 2,
+        // 往左 3px、往下 2px（离文字远一点、视觉重心略低）
+        return QRect(rect.right() - size - 7,
+                     rect.top() + (rect.height() - size) / 2 + 2,
                      size, size);
     }
 
@@ -245,6 +247,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_tabs = tabs;
 
     auto* tabBar = new FileTabBar(tabs);
+    tabBar->setMouseTracking(true);   // 不开这个，hover 永远不触发
     tabBar->onCloseClicked = [this](int index) { onTabCloseRequested(index); };
     tabs->setTabBar(tabBar);
     m_tabs->setIconSize(QSize(12, 12));
