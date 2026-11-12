@@ -214,6 +214,205 @@ void CodeEditor::setSymbolChecker(std::function<bool(const QString&)> checker)
     m_symbolChecker = std::move(checker);
 }
 
+// ---------------------------------------------------------------- 编辑操作
+
+void CodeEditor::indentSelection()
+{
+    QTextCursor cursor = textCursor();
+    const int first = document()->findBlock(cursor.selectionStart()).blockNumber();
+    const int last = document()->findBlock(cursor.selectionEnd()).blockNumber();
+
+    cursor.beginEditBlock();
+    for (int i = first; i <= last; ++i) {
+        QTextCursor line(document()->findBlockByNumber(i));
+        line.movePosition(QTextCursor::StartOfBlock);
+        line.insertText(QStringLiteral("    "));
+    }
+    cursor.endEditBlock();
+}
+
+void CodeEditor::unindentSelection()
+{
+    QTextCursor cursor = textCursor();
+    const int first = document()->findBlock(cursor.selectionStart()).blockNumber();
+    const int last = document()->findBlock(cursor.selectionEnd()).blockNumber();
+
+    cursor.beginEditBlock();
+    for (int i = first; i <= last; ++i) {
+        const QTextBlock block = document()->findBlockByNumber(i);
+        const QString text = block.text();
+
+        int remove = 0;
+        while (remove < 4 && remove < text.size() && text.at(remove) == QLatin1Char(' '))
+            ++remove;
+        if (remove == 0 && !text.isEmpty() && text.at(0) == QLatin1Char('	'))
+            remove = 1;
+        if (remove == 0)
+            continue;
+
+        QTextCursor line(block);
+        line.movePosition(QTextCursor::StartOfBlock);
+        line.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, remove);
+        line.removeSelectedText();
+    }
+    cursor.endEditBlock();
+}
+
+void CodeEditor::commentSelection()
+{
+    QTextCursor cursor = textCursor();
+    const int first = document()->findBlock(cursor.selectionStart()).blockNumber();
+    const int last = document()->findBlock(cursor.selectionEnd()).blockNumber();
+
+    cursor.beginEditBlock();
+    for (int i = first; i <= last; ++i) {
+        const QTextBlock block = document()->findBlockByNumber(i);
+        const QString text = block.text();
+        if (text.trimmed().isEmpty())
+            continue;
+
+        int indent = 0;
+        while (indent < text.size()
+               && (text.at(indent) == QLatin1Char(' ') || text.at(indent) == QLatin1Char('	')))
+            ++indent;
+        if (text.mid(indent).startsWith(QLatin1String("//")))
+            continue;
+
+        QTextCursor line(block);
+        line.movePosition(QTextCursor::StartOfBlock);
+        line.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, indent);
+        line.insertText(QStringLiteral("// "));
+    }
+    cursor.endEditBlock();
+}
+
+void CodeEditor::uncommentSelection()
+{
+    QTextCursor cursor = textCursor();
+    const int first = document()->findBlock(cursor.selectionStart()).blockNumber();
+    const int last = document()->findBlock(cursor.selectionEnd()).blockNumber();
+
+    cursor.beginEditBlock();
+    for (int i = first; i <= last; ++i) {
+        const QTextBlock block = document()->findBlockByNumber(i);
+        const QString text = block.text();
+
+        int indent = 0;
+        while (indent < text.size()
+               && (text.at(indent) == QLatin1Char(' ') || text.at(indent) == QLatin1Char('	')))
+            ++indent;
+        if (!text.mid(indent).startsWith(QLatin1String("//")))
+            continue;
+
+        int remove = 2;
+        if (text.mid(indent + 2, 1) == QLatin1String(" "))
+            ++remove;
+
+        QTextCursor line(block);
+        line.movePosition(QTextCursor::StartOfBlock);
+        line.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, indent);
+        line.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, remove);
+        line.removeSelectedText();
+    }
+    cursor.endEditBlock();
+}
+
+bool CodeEditor::findNextText(const QString& text, bool forward)
+{
+    if (text.isEmpty())
+        return false;
+
+    QTextDocument::FindFlags flags;
+    if (!forward)
+        flags |= QTextDocument::FindBackward;
+
+    QTextCursor found = document()->find(text, textCursor(), flags);
+    if (found.isNull()) {
+        // 回绕到文件头/尾再找一次
+        QTextCursor from(document());
+        if (!forward)
+            from.movePosition(QTextCursor::End);
+        found = document()->find(text, from, flags);
+    }
+
+    if (found.isNull())
+        return false;
+
+    setTextCursor(found);
+    centerCursor();
+    return true;
+}
+
+// ---------------------------------------------------------------- 书签
+
+void CodeEditor::toggleBookmarkAtCursor()
+{
+    const int number = textCursor().blockNumber();
+    if (m_bookmarks.contains(number))
+        m_bookmarks.remove(number);
+    else
+        m_bookmarks.insert(number);
+    m_lineNumberArea->update();
+}
+
+void CodeEditor::removeBookmarkAtCursor()
+{
+    m_bookmarks.remove(textCursor().blockNumber());
+    m_lineNumberArea->update();
+}
+
+void CodeEditor::gotoNextBookmark()
+{
+    if (m_bookmarks.isEmpty())
+        return;
+
+    const int current = textCursor().blockNumber();
+    for (int n = current + 1; n < blockCount(); ++n) {
+        if (m_bookmarks.contains(n)) {
+            gotoLine(n + 1);
+            return;
+        }
+    }
+    gotoLine(*m_bookmarks.begin() + 1);     // 回绕到第一个
+}
+
+void CodeEditor::toggleBreakpointAtCursor()
+{
+    const int number = textCursor().blockNumber();
+    if (m_breakpoints.contains(number))
+        m_breakpoints.remove(number);
+    else
+        m_breakpoints.insert(number);
+    m_lineNumberArea->update();
+}
+
+void CodeEditor::removeBreakpointAtCursor()
+{
+    m_breakpoints.remove(textCursor().blockNumber());
+    m_lineNumberArea->update();
+}
+
+void CodeEditor::clearBreakpoints()
+{
+    m_breakpoints.clear();
+    m_lineNumberArea->update();
+}
+
+void CodeEditor::gotoPrevBookmark()
+{
+    if (m_bookmarks.isEmpty())
+        return;
+
+    const int current = textCursor().blockNumber();
+    for (int n = current - 1; n >= 0; --n) {
+        if (m_bookmarks.contains(n)) {
+            gotoLine(n + 1);
+            return;
+        }
+    }
+    gotoLine(*m_bookmarks.begin() + 1);
+}
+
 void CodeEditor::updateHoverSelection(const QTextCursor& cursor, bool ctrlHeld)
 {
     QTextCursor hover;
@@ -514,6 +713,18 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent* event)
         if (block.isVisible() && bottom >= event->rect().top()) {
             painter.drawText(0, top, m_lineNumberArea->width() - 6,
                              fontMetrics().height(), Qt::AlignRight, QString::number(blockNumber + 1));
+
+            if (m_breakpoints.contains(blockNumber)) {
+                painter.setPen(QPen(QColor(0xa0, 0x10, 0x10), 1));
+                painter.setBrush(QColor(0xd8, 0x2b, 0x2b));
+                painter.drawEllipse(QPointF(5, top + fontMetrics().height() / 2.0), 3.2, 3.2);
+                painter.setBrush(Qt::NoBrush);
+            }
+
+            if (m_bookmarks.contains(blockNumber)) {
+                painter.fillRect(QRect(3, top + 2, 4, fontMetrics().height() - 4),
+                                 QColor(0x2f, 0x7c, 0xd8));
+            }
         }
 
         block = block.next();

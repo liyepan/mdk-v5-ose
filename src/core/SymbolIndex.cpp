@@ -213,6 +213,13 @@ void SymbolIndex::build(const UvProject& project, int targetIndex)
     m_built = true;
 }
 
+QStringList SymbolIndex::names() const
+{
+    QStringList out = m_symbols.keys();
+    out.sort(Qt::CaseInsensitive);
+    return out;
+}
+
 QList<SymbolLocation> SymbolIndex::lookup(const QString& name) const
 {
     QList<SymbolLocation> all = m_symbols.value(name);

@@ -22,8 +22,13 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QInputDialog>
 #include <QLabel>
+#include <QListWidget>
+#include <QVBoxLayout>
 #include <QLayout>
 #include <QMenu>
 #include <QMenuBar>
@@ -179,6 +184,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_engine = new BuildEngine(this);
 
     createActions();
+    createMainToolbarActions();
     createMenus();
     createToolBars();
     createDocks();
@@ -273,6 +279,101 @@ void MainWindow::createActions()
     m_actDownload = new QAction(Lang::t("Download to Flash"), this);
     m_actDownload->setShortcut(QKeySequence(Qt::Key_F8));
     connect(m_actDownload, &QAction::triggered, this, &MainWindow::onDownload);
+}
+
+void MainWindow::createMainToolbarActions()
+{
+    // 顺序完全照 uVision：nullptr 代表分隔线
+    m_mainBarActions.clear();
+
+    auto add = [this](const QString& icon, const QString& text, const QKeySequence& keys,
+                      void (MainWindow::*handler)()) {
+        auto* action = new QAction(KeilStyle::icon(icon), Lang::t(text.toUtf8().constData()), this);
+        action->setToolTip(Lang::t(text.toUtf8().constData()));
+        if (!keys.isEmpty())
+            action->setShortcut(keys);
+        connect(action, &QAction::triggered, this, handler);
+        m_mainBarActions << action;
+        return action;
+    };
+
+    // 文件
+    m_mainBarActions << m_actNewFile;
+    m_mainBarActions << m_actOpenFile;
+    m_mainBarActions << m_actSave;
+    m_mainBarActions << m_actSaveAll;
+    m_mainBarActions << nullptr;
+
+    // 剪贴板
+    add(QStringLiteral("cut"), QStringLiteral("Cut"), QKeySequence::Cut, &MainWindow::onCut);
+    add(QStringLiteral("copy"), QStringLiteral("Copy"), QKeySequence::Copy, &MainWindow::onCopy);
+    add(QStringLiteral("paste"), QStringLiteral("Paste"), QKeySequence::Paste, &MainWindow::onPaste);
+    m_mainBarActions << nullptr;
+
+    // 撤销 / 恢复
+    add(QStringLiteral("undo"), QStringLiteral("Undo"), QKeySequence::Undo, &MainWindow::onUndo);
+    add(QStringLiteral("redo"), QStringLiteral("Redo"), QKeySequence::Redo, &MainWindow::onRedo);
+    m_mainBarActions << nullptr;
+
+    // 跳转历史
+    add(QStringLiteral("back"), QStringLiteral("Navigate Back"),
+        QKeySequence(Qt::ALT + Qt::Key_Left), &MainWindow::onNavigateBack);
+    add(QStringLiteral("forward"), QStringLiteral("Navigate Forward"),
+        QKeySequence(Qt::ALT + Qt::Key_Right), &MainWindow::onNavigateForward);
+    m_mainBarActions << nullptr;
+
+    // 鼠标模式（占位）
+    auto* mouseMode = new QAction(KeilStyle::icon(QStringLiteral("mouse")),
+                                  QStringLiteral("Mouse Mode"), this);
+    mouseMode->setCheckable(true);
+    mouseMode->setToolTip(QStringLiteral("Mouse Mode"));
+    m_mainBarActions << mouseMode;
+    m_mainBarActions << nullptr;
+
+    // 书签
+    add(QStringLiteral("bookmark_prev"), QStringLiteral("Previous Bookmark"), QKeySequence(),
+        &MainWindow::onBookmarkPrev);
+    add(QStringLiteral("bookmark_next"), QStringLiteral("Next Bookmark"), QKeySequence(),
+        &MainWindow::onBookmarkNext);
+    add(QStringLiteral("bookmark_delete"), QStringLiteral("Delete Bookmark"),
+        QKeySequence(Qt::CTRL + Qt::Key_F2), &MainWindow::onBookmarkDelete);
+    m_mainBarActions << nullptr;
+
+    // 缩进 / 注释
+    add(QStringLiteral("indent"), QStringLiteral("Indent Selection"),
+        QKeySequence(Qt::Key_Tab), &MainWindow::onIndent);
+    add(QStringLiteral("unindent"), QStringLiteral("Unindent Selection"),
+        QKeySequence(Qt::SHIFT + Qt::Key_Tab), &MainWindow::onUnindent);
+    add(QStringLiteral("comment"), QStringLiteral("Comment Selection"),
+        QKeySequence(Qt::CTRL + Qt::Key_K), &MainWindow::onComment);
+    add(QStringLiteral("uncomment"), QStringLiteral("Uncomment Selection"),
+        QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_K), &MainWindow::onUncomment);
+    m_mainBarActions << nullptr;
+
+    // 搜索
+    add(QStringLiteral("find_all"), QStringLiteral("Find in Files"),
+        QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_F), &MainWindow::onFindInFiles);
+    // 符号下拉框插在 Find Next 之前（uVision 就是这么排的）
+    m_symbolComboAnchor = add(QStringLiteral("find"), QStringLiteral("Find Next"),
+                              QKeySequence(Qt::Key_F3), &MainWindow::onFindNext);
+    add(QStringLiteral("search"), QStringLiteral("Find"), QKeySequence::Find, &MainWindow::onFind);
+    m_mainBarActions << nullptr;
+
+    // 调试
+    add(QStringLiteral("debug_start"), QStringLiteral("Start/Stop Debug Session"),
+        QKeySequence(Qt::CTRL + Qt::Key_F5), &MainWindow::onDebugPlaceholder);
+    m_mainBarActions << nullptr;
+
+    // 断点
+    add(QStringLiteral("breakpoint_insert"), QStringLiteral("Insert Breakpoint"),
+        QKeySequence(Qt::Key_F9), &MainWindow::onBreakpointToggle);
+    add(QStringLiteral("breakpoint_delete"), QStringLiteral("Delete Breakpoint"), QKeySequence(),
+        &MainWindow::onBreakpointDelete);
+    add(QStringLiteral("breakpoint_clear"), QStringLiteral("Delete All Breakpoints (Target)"),
+        QKeySequence(), &MainWindow::onBreakpointClearTarget);
+    add(QStringLiteral("breakpoint_clear_all"), QStringLiteral("Delete All Breakpoints (All)"),
+        QKeySequence(), &MainWindow::onBreakpointClearAll);
+    m_mainBarActions << nullptr;
 }
 
 void MainWindow::createMenus()
@@ -537,12 +638,24 @@ void MainWindow::createToolBars()
         return bar;
     };
 
-    // ---- 第 1 排：文件（New / Open / Save / Save All）----
-    QToolBar* fileBar = makeBar(QStringLiteral("File"));
-    fileBar->addAction(m_actNewFile);
-    fileBar->addAction(m_actOpenFile);
-    fileBar->addAction(m_actSave);
-    fileBar->addAction(m_actSaveAll);
+    // ---- 第 1 排：完全按 uVision 的顺序 ----
+    QToolBar* mainBar = makeBar(QStringLiteral("Main"));
+    for (QAction* action : m_mainBarActions) {
+        if (action && action == m_symbolComboAnchor) {
+            m_symbolCombo = new QComboBox(mainBar);
+            m_symbolCombo->setMinimumWidth(180);
+            m_symbolCombo->setFixedHeight(22);
+            m_symbolCombo->setToolTip(Lang::t("Symbols"));
+            connect(m_symbolCombo, QOverload<int>::of(&QComboBox::activated),
+                    this, &MainWindow::onSymbolChosen);
+            mainBar->addWidget(m_symbolCombo);
+            populateSymbolCombo();
+        }
+        if (!action)
+            mainBar->addSeparator();
+        else
+            mainBar->addAction(action);
+    }
 
     // ---- 第 2 排：构建（Translate / Build / Rebuild / Batch / Stop）----
     QToolBar* buildBar = makeBar(QStringLiteral("Build"));
@@ -568,8 +681,7 @@ void MainWindow::createToolBars()
         return a;
     };
 
-    addDebugAction(QStringLiteral("debug_start"), Lang::t("Start/Stop Debug Session"),
-                   QKeySequence(Qt::CTRL + Qt::Key_F5));
+    // Start/Stop 和断点按钮已经在第一排了，这里只放执行控制
     addDebugAction(QStringLiteral("run"), Lang::t("Run"), QKeySequence(Qt::Key_F5));
     addDebugAction(QStringLiteral("stop"), Lang::t("Stop"), QKeySequence());
     debugBar->addSeparator();
@@ -581,11 +693,6 @@ void MainWindow::createToolBars()
                    QKeySequence(Qt::CTRL + Qt::Key_F10));
     debugBar->addSeparator();
     addDebugAction(QStringLiteral("reset"), Lang::t("Reset"), QKeySequence());
-    debugBar->addSeparator();
-    addDebugAction(QStringLiteral("breakpoint"), Lang::t("Insert/Remove Breakpoint"),
-                   QKeySequence(Qt::Key_F9));
-    addDebugAction(QStringLiteral("breakpoint_off"), Lang::t("Enable/Disable Breakpoint"),
-                   QKeySequence());
 }
 
 void MainWindow::createDocks()
@@ -768,6 +875,9 @@ void MainWindow::applyProject()
     m_projectTree->setProject(m_project, m_activeTarget);
     m_buildOutput->setProjectDir(m_project.directory());
     m_symbols.clear();
+    m_navHistory.clear();
+    m_navIndex = -1;
+    populateSymbolCombo();
 
     updateWindowTitle();
     setBusy(false);
@@ -948,6 +1058,293 @@ void MainWindow::attachTabCloseButton(int index, CodeEditor* editor)
     m_tabs->tabBar()->setTabButton(index, QTabBar::RightSide, closeButton);
 }
 
+// ---------------------------------------------------------------- 第一排操作
+
+void MainWindow::onCut()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->cut();
+}
+
+void MainWindow::onCopy()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->copy();
+}
+
+void MainWindow::onPaste()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->paste();
+}
+
+void MainWindow::onUndo()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->undo();
+}
+
+void MainWindow::onRedo()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->redo();
+}
+
+void MainWindow::recordNavigation(const QString& file, int line)
+{
+    if (file.isEmpty())
+        return;
+
+    if (m_navIndex >= 0 && m_navIndex < m_navHistory.size()) {
+        const NavPoint& current = m_navHistory.at(m_navIndex);
+        if (current.file == file && current.line == line)
+            return;
+    }
+
+    while (m_navHistory.size() > m_navIndex + 1)
+        m_navHistory.removeLast();
+
+    NavPoint point;
+    point.file = file;
+    point.line = line;
+    m_navHistory.append(point);
+
+    while (m_navHistory.size() > 200) {
+        m_navHistory.removeFirst();
+        --m_navIndex;
+    }
+    m_navIndex = m_navHistory.size() - 1;
+}
+
+void MainWindow::onNavigateBack()
+{
+    if (m_navIndex <= 0)
+        return;
+    --m_navIndex;
+    const NavPoint point = m_navHistory.at(m_navIndex);
+    if (CodeEditor* editor = openFile(point.file))
+        editor->gotoLine(point.line);
+}
+
+void MainWindow::onNavigateForward()
+{
+    if (m_navIndex < 0 || m_navIndex + 1 >= m_navHistory.size())
+        return;
+    ++m_navIndex;
+    const NavPoint point = m_navHistory.at(m_navIndex);
+    if (CodeEditor* editor = openFile(point.file))
+        editor->gotoLine(point.line);
+}
+
+void MainWindow::onBookmarkPrev()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->gotoPrevBookmark();
+}
+
+void MainWindow::onBookmarkNext()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->gotoNextBookmark();
+}
+
+void MainWindow::onBookmarkDelete()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->toggleBookmarkAtCursor();
+}
+
+void MainWindow::onIndent()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->indentSelection();
+}
+
+void MainWindow::onUnindent()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->unindentSelection();
+}
+
+void MainWindow::onComment()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->commentSelection();
+}
+
+void MainWindow::onUncomment()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->uncommentSelection();
+}
+
+void MainWindow::onFindNext()
+{
+    CodeEditor* editor = currentEditor();
+    if (!editor)
+        return;
+
+    QString needle = editor->textCursor().selectedText();
+    if (needle.isEmpty()) {
+        QTextCursor cursor = editor->textCursor();
+        cursor.select(QTextCursor::WordUnderCursor);
+        needle = cursor.selectedText();
+    }
+    if (needle.isEmpty())
+        return;
+
+    if (!editor->findNextText(needle))
+        m_statusMessage->setText(QStringLiteral("not found: %1").arg(needle));
+}
+
+void MainWindow::onFind()
+{
+    CodeEditor* editor = currentEditor();
+    if (!editor)
+        return;
+
+    bool ok = false;
+    const QString needle = QInputDialog::getText(this, Lang::t("Find"),
+                                                 QStringLiteral("Find:"), QLineEdit::Normal,
+                                                 editor->textCursor().selectedText(), &ok);
+    if (!ok || needle.isEmpty())
+        return;
+
+    if (!editor->findNextText(needle))
+        m_statusMessage->setText(QStringLiteral("not found: %1").arg(needle));
+}
+
+void MainWindow::onFindInFiles()
+{
+    if (!m_project.isValid())
+        return;
+
+    bool ok = false;
+    const QString needle = QInputDialog::getText(this, Lang::t("Find in Files"),
+                                                 QStringLiteral("Find:"), QLineEdit::Normal,
+                                                 QString(), &ok);
+    if (!ok || needle.isEmpty())
+        return;
+
+    const Target* target = m_project.target(m_activeTarget);
+    if (!target)
+        return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(Lang::t("Find in Files"));
+    dialog.resize(720, 420);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* list = new QListWidget(&dialog);
+    layout->addWidget(list);
+
+    int hits = 0;
+    for (const ProjGroup& group : target->groups) {
+        for (const ProjFile& file : group.files) {
+            if (file.excluded)
+                continue;
+            QString path = file.path;
+            path.replace(QLatin1Char('\\'), QLatin1Char('/'));
+            const QString abs = QDir::cleanPath(m_project.directory() + QLatin1Char('/') + path);
+
+            QFile input(abs);
+            if (!input.open(QIODevice::ReadOnly | QIODevice::Text))
+                continue;
+
+            QTextStream stream(&input);
+            stream.setCodec("UTF-8");
+            int lineNumber = 0;
+            while (!stream.atEnd()) {
+                const QString line = stream.readLine();
+                ++lineNumber;
+                if (!line.contains(needle))
+                    continue;
+
+                auto* item = new QListWidgetItem(
+                    QStringLiteral("%1 : %2 : %3")
+                        .arg(QFileInfo(abs).fileName())
+                        .arg(lineNumber)
+                        .arg(line.trimmed().left(120)));
+                item->setData(Qt::UserRole, abs);
+                item->setData(Qt::UserRole + 1, lineNumber);
+                list->addItem(item);
+                ++hits;
+            }
+        }
+    }
+
+    connect(list, &QListWidget::itemDoubleClicked, &dialog, [this, &dialog](QListWidgetItem* item) {
+        if (!item)
+            return;
+        const QString file = item->data(Qt::UserRole).toString();
+        const int line = item->data(Qt::UserRole + 1).toInt();
+        dialog.accept();
+        if (CodeEditor* editor = openFile(file))
+            editor->gotoLine(line);
+    });
+
+    m_statusMessage->setText(QStringLiteral("%1 hit(s)").arg(hits));
+    dialog.exec();
+}
+
+void MainWindow::populateSymbolCombo()
+{
+    if (!m_symbolCombo)
+        return;
+
+    m_symbolCombo->clear();
+    if (!m_project.isValid())
+        return;
+
+    ensureSymbolIndex();
+    const QStringList names = m_symbols.names();
+    m_symbolCombo->addItems(names);
+    m_symbolCombo->setCurrentIndex(-1);
+    m_symbolCombo->setToolTip(QStringLiteral("%1 symbols").arg(names.size()));
+}
+
+void MainWindow::onSymbolChosen(int index)
+{
+    if (!m_symbolCombo || index < 0)
+        return;
+
+    const QString name = m_symbolCombo->itemText(index);
+    const QList<SymbolLocation> hits = m_symbols.lookup(name);
+    if (hits.isEmpty())
+        return;
+
+    const SymbolLocation& target = hits.first();
+    if (CodeEditor* editor = openFile(target.file)) {
+        editor->gotoLine(target.line);
+        recordNavigation(target.file, target.line);
+    }
+}
+
+void MainWindow::onBreakpointToggle()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->toggleBreakpointAtCursor();
+}
+
+void MainWindow::onBreakpointDelete()
+{
+    if (CodeEditor* editor = currentEditor())
+        editor->removeBreakpointAtCursor();
+}
+
+void MainWindow::onBreakpointClearTarget()
+{
+    for (int i = 0; i < m_tabs->count(); ++i) {
+        if (auto* editor = qobject_cast<CodeEditor*>(m_tabs->widget(i)))
+            editor->clearBreakpoints();
+    }
+    m_statusMessage->setText(QStringLiteral("breakpoints cleared"));
+}
+
+void MainWindow::onBreakpointClearAll()
+{
+    onBreakpointClearTarget();
+}
+
 QColor MainWindow::nextTabColor()
 {
     static const QColor palette[] = {
@@ -1101,6 +1498,8 @@ void MainWindow::onWordActivated(const QString& word, const QString& fromFile)
 
     if (CodeEditor* editor = openFile(target.file))
         editor->gotoLine(target.line);
+
+    recordNavigation(target.file, target.line);
 
     m_statusMessage->setText(QStringLiteral("%1 → %2 : %3")
                                  .arg(word, QFileInfo(target.file).fileName())

@@ -9,6 +9,7 @@
 #include "core/UvprojModel.h"
 
 class QAction;
+class QComboBox;
 class QDockWidget;
 class QMenu;
 class QLabel;
@@ -60,6 +61,30 @@ private slots:
     void onEngineFinished(bool success, int errors, int warnings);
 
     void onFormatDocument();
+
+    // 第一排工具栏对应的操作
+    void onCut();
+    void onCopy();
+    void onPaste();
+    void onUndo();
+    void onRedo();
+    void onNavigateBack();
+    void onNavigateForward();
+    void onBookmarkPrev();
+    void onBookmarkNext();
+    void onBookmarkDelete();
+    void onIndent();
+    void onUnindent();
+    void onComment();
+    void onUncomment();
+    void onFindInFiles();
+    void onFindNext();
+    void onFind();
+    void onSymbolChosen(int index);
+    void onBreakpointToggle();
+    void onBreakpointDelete();
+    void onBreakpointClearTarget();
+    void onBreakpointClearAll();
     void switchLanguage(int id);
     void retranslateUi();
     void onWordActivated(const QString& word, const QString& filePath);
@@ -74,6 +99,9 @@ private slots:
 
 private:
     void createActions();
+    void createMainToolbarActions();
+    void populateSymbolCombo();
+    void recordNavigation(const QString& file, int line);
     void createMenus();
     void createToolBars();
     void createDocks();
@@ -126,6 +154,18 @@ private:
     QLabel* m_statusToolchain = nullptr;
     QLabel* m_statusEncoding = nullptr;
     QLabel* m_statusPosition = nullptr;
+
+    struct NavPoint
+    {
+        QString file;
+        int     line = 0;
+    };
+
+    QList<QAction*> m_mainBarActions;   // nullptr = 分隔线
+    QComboBox*      m_symbolCombo = nullptr;
+    QAction*        m_symbolComboAnchor = nullptr;
+    QList<NavPoint> m_navHistory;
+    int             m_navIndex = -1;
 
     QAction* m_actNewFile = nullptr;
     QAction* m_actOpenFile = nullptr;

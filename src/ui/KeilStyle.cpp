@@ -268,6 +268,141 @@ void paintIcon(QPainter& p, const QString& name, int size)
         p.setPen(QPen(kRed, 1.3));
         p.setBrush(Qt::NoBrush);
         p.drawEllipse(r.adjusted(1.8, 1.8, -1.8, -1.8));
+    } else if (name == QLatin1String("cut")) {
+        p.setPen(QPen(kInk, 1.2));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QPointF(r.left() + 3.2, r.bottom() - 2.6), 1.8, 1.8);
+        p.drawEllipse(QPointF(r.left() + 3.2, r.top() + 2.6), 1.8, 1.8);
+        p.drawLine(QPointF(r.left() + 4.6, r.bottom() - 3.4), QPointF(r.right() - 1.5, r.top() + 1.6));
+        p.drawLine(QPointF(r.left() + 4.6, r.top() + 3.4), QPointF(r.right() - 1.5, r.bottom() - 1.6));
+    } else if (name == QLatin1String("copy")) {
+        p.setPen(QPen(QColor(0x55, 0x55, 0x55), 1));
+        p.setBrush(QColor(0xe8, 0xe8, 0xe8));
+        p.drawRect(QRectF(r.left() + 4.0, r.top() + 1.0, 7.5, 9.0));
+        p.setBrush(kPage);
+        p.drawRect(QRectF(r.left() + 1.5, r.top() + 4.0, 7.5, 9.0));
+    } else if (name == QLatin1String("paste")) {
+        p.setPen(QPen(QColor(0x8a, 0x6a, 0x3a), 1));
+        p.setBrush(QColor(0xd8, 0xbc, 0x8a));
+        p.drawRect(QRectF(r.left() + 2.0, r.top() + 3.0, 9.5, 10.0));
+        p.setBrush(kPage);
+        p.drawRect(QRectF(r.left() + 3.5, r.top() + 1.0, 6.5, 3.0));
+    } else if (name == QLatin1String("undo") || name == QLatin1String("redo")) {
+        const bool redo = (name == QLatin1String("redo"));
+        p.setPen(QPen(kBlue, 1.6));
+        p.setBrush(Qt::NoBrush);
+        const QRectF arc = redo ? QRectF(r.left() + 1.5, r.top() + 3.5, 10.0, 8.0)
+                                : QRectF(r.right() - 11.5, r.top() + 3.5, 10.0, 8.0);
+        p.drawArc(arc, redo ? 160 * 16 : 20 * 16, 160 * 16);
+        QPolygonF tip;
+        if (redo) {
+            tip << QPointF(r.left() + 2.0, r.top() + 5.0)
+                << QPointF(r.left() + 6.0, r.top() + 6.0)
+                << QPointF(r.left() + 2.5, r.top() + 8.5);
+        } else {
+            tip << QPointF(r.right() - 2.0, r.top() + 5.0)
+                << QPointF(r.right() - 6.0, r.top() + 6.0)
+                << QPointF(r.right() - 2.5, r.top() + 8.5);
+        }
+        p.setBrush(kBlue);
+        p.setPen(QPen(kBlue, 0));
+        p.drawPolygon(tip);
+    } else if (name == QLatin1String("back") || name == QLatin1String("forward")) {
+        const bool back = (name == QLatin1String("back"));
+        p.setPen(QPen(QColor(0x4a, 0x6a, 0x8f), 1.6, Qt::SolidLine, Qt::RoundCap));
+        if (back) {
+            p.drawLine(QPointF(r.right() - 2.0, r.center().y()), QPointF(r.left() + 2.0, r.center().y()));
+            p.drawLine(QPointF(r.left() + 2.0, r.center().y()), QPointF(r.left() + 5.5, r.center().y() - 3.2));
+            p.drawLine(QPointF(r.left() + 2.0, r.center().y()), QPointF(r.left() + 5.5, r.center().y() + 3.2));
+        } else {
+            p.drawLine(QPointF(r.left() + 2.0, r.center().y()), QPointF(r.right() - 2.0, r.center().y()));
+            p.drawLine(QPointF(r.right() - 2.0, r.center().y()), QPointF(r.right() - 5.5, r.center().y() - 3.2));
+            p.drawLine(QPointF(r.right() - 2.0, r.center().y()), QPointF(r.right() - 5.5, r.center().y() + 3.2));
+        }
+    } else if (name == QLatin1String("mouse")) {
+        p.setPen(QPen(QColor(0x60, 0x68, 0x74), 1.2));
+        p.setBrush(kPage);
+        p.drawRoundedRect(QRectF(r.left() + 4.5, r.top() + 1.5, 7.0, 11.0), 3.5, 3.5);
+        p.drawLine(QPointF(r.center().x(), r.top() + 1.5), QPointF(r.center().x(), r.top() + 5.0));
+    } else if (name == QLatin1String("bookmark_prev") || name == QLatin1String("bookmark_next")) {
+        const bool next = (name == QLatin1String("bookmark_next"));
+        p.setPen(QPen(QColor(0x1f, 0x5f, 0xbf), 1));
+        p.setBrush(QColor(0x6f, 0x9e, 0xe8));
+        QPolygonF ribbon;
+        ribbon << QPointF(r.left() + 2.0, r.top() + 1.5) << QPointF(r.left() + 8.0, r.top() + 1.5)
+               << QPointF(r.left() + 8.0, r.bottom() - 1.5) << QPointF(r.left() + 5.0, r.bottom() - 4.5)
+               << QPointF(r.left() + 2.0, r.bottom() - 1.5);
+        p.drawPolygon(ribbon);
+        p.setPen(QPen(kInk, 1.4));
+        if (next) {
+            p.drawLine(QPointF(r.left() + 9.5, r.center().y()), QPointF(r.right() - 1.0, r.center().y()));
+            p.drawLine(QPointF(r.right() - 1.0, r.center().y()), QPointF(r.right() - 4.0, r.center().y() - 2.6));
+            p.drawLine(QPointF(r.right() - 1.0, r.center().y()), QPointF(r.right() - 4.0, r.center().y() + 2.6));
+        } else {
+            p.drawLine(QPointF(r.left() + 1.0, r.center().y()), QPointF(r.left() + 1.5, r.center().y()));
+        }
+    } else if (name == QLatin1String("bookmark_delete")) {
+        p.setPen(QPen(QColor(0x1f, 0x5f, 0xbf), 1));
+        p.setBrush(QColor(0x6f, 0x9e, 0xe8));
+        QPolygonF ribbon;
+        ribbon << QPointF(r.left() + 1.5, r.top() + 1.5) << QPointF(r.left() + 7.0, r.top() + 1.5)
+               << QPointF(r.left() + 7.0, r.bottom() - 2.5) << QPointF(r.left() + 4.2, r.bottom() - 5.0)
+               << QPointF(r.left() + 1.5, r.bottom() - 2.5);
+        p.drawPolygon(ribbon);
+        p.setPen(QPen(kRed, 1.6, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(r.left() + 8.5, r.top() + 6.0), QPointF(r.right() - 1.5, r.bottom() - 1.5));
+        p.drawLine(QPointF(r.right() - 1.5, r.top() + 6.0), QPointF(r.left() + 8.5, r.bottom() - 1.5));
+    } else if (name == QLatin1String("indent") || name == QLatin1String("unindent")) {
+        const bool in = (name == QLatin1String("indent"));
+        p.setPen(QPen(QColor(0x8a, 0x93, 0x9e), 1));
+        for (int i = 0; i < 3; ++i)
+            p.drawLine(QPointF(r.left() + 5.0, r.top() + 3.0 + i * 4.0), QPointF(r.right() - 1.0, r.top() + 3.0 + i * 4.0));
+        p.setPen(QPen(kGreen.darker(120), 1.5, Qt::SolidLine, Qt::RoundCap));
+        if (in)
+            p.drawLine(QPointF(r.left() + 1.0, r.center().y()), QPointF(r.left() + 3.5, r.center().y()));
+        else
+            p.drawLine(QPointF(r.left() + 1.0, r.center().y()), QPointF(r.left() + 3.5, r.center().y()));
+    } else if (name == QLatin1String("comment") || name == QLatin1String("uncomment")) {
+        p.setPen(QPen(QColor(0x8a, 0x93, 0x9e), 1));
+        for (int i = 0; i < 3; ++i)
+            p.drawLine(QPointF(r.left() + 5.0, r.top() + 3.5 + i * 4.0), QPointF(r.right() - 1.0, r.top() + 3.5 + i * 4.0));
+        QFont f = p.font();
+        f.setPixelSize(8);
+        f.setBold(true);
+        p.setFont(f);
+        p.setPen(name == QLatin1String("comment") ? kGreen.darker(130) : kRed);
+        p.drawText(QRectF(r.left() - 1.0, r.top() + 1.0, 6.0, r.height()),
+                   Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("//"));
+    } else if (name == QLatin1String("find")) {
+        drawMagnifier(p, r, QColor(0x1f, 0x5f, 0xbf));
+    } else if (name == QLatin1String("find_all")) {
+        drawFolderShape(p, QRectF(r.left(), r.top() + 3.0, r.width(), r.height() - 3.0));
+        drawMagnifier(p, QRectF(r.left() + 4.0, r.top(), 10.0, 10.0), QColor(0x1f, 0x5f, 0xbf));
+    } else if (name == QLatin1String("breakpoint_insert")) {
+        p.setPen(QPen(kRed.darker(170), 1));
+        p.setBrush(kRed);
+        p.drawEllipse(QRectF(r.left() + 2.0, r.top() + 2.0, 8.0, 8.0));
+        p.setPen(QPen(QColor(0x2e, 0x8b, 0x34), 1.6, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(r.right() - 3.0, r.center().y()), QPointF(r.right() - 0.5, r.center().y()));
+        p.drawLine(QPointF(r.right() - 1.75, r.center().y() - 2.0), QPointF(r.right() - 1.75, r.center().y() + 2.0));
+    } else if (name == QLatin1String("breakpoint_delete")) {
+        p.setPen(QPen(kRed.darker(170), 1));
+        p.setBrush(kRed);
+        p.drawEllipse(QRectF(r.left() + 2.0, r.top() + 2.0, 8.0, 8.0));
+        p.setPen(QPen(QColor(0x2e, 0x8b, 0x34), 1.8, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(r.right() - 3.0, r.center().y()), QPointF(r.right() - 0.5, r.center().y()));
+    } else if (name == QLatin1String("breakpoint_clear")) {
+        p.setPen(QPen(kRed.darker(170), 1));
+        p.setBrush(QColor(0xee, 0xc8, 0xc4));
+        p.drawEllipse(QRectF(r.left() + 1.0, r.top() + 2.0, 7.0, 7.0));
+        p.drawEllipse(QRectF(r.left() + 5.0, r.top() + 7.0, 7.0, 7.0));
+    } else if (name == QLatin1String("breakpoint_clear_all")) {
+        p.setPen(QPen(kRed.darker(170), 1));
+        p.setBrush(QColor(0xee, 0xc8, 0xc4));
+        p.drawEllipse(QRectF(r.left() + 1.0, r.top() + 1.5, 6.0, 6.0));
+        p.drawEllipse(QRectF(r.left() + 5.5, r.top() + 5.5, 6.0, 6.0));
+        p.setPen(QPen(kRed.darker(150), 1.4));
+        p.drawLine(QPointF(r.left() + 6.0, r.top() + 1.5), QPointF(r.right() - 3.0, r.bottom() - 2.0));
     } else if (name == QLatin1String("close")) {
         // 细一点的圆头叉号，比 Fusion 自带的方块 X 好看
         QPen pen(QColor(0x7b, 0x84, 0x91), 1.5, Qt::SolidLine, Qt::RoundCap);

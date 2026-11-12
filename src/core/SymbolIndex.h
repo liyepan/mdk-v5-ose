@@ -27,6 +27,9 @@ public:
     // 定义优先于声明
     QList<SymbolLocation> lookup(const QString& name) const;
 
+    // 当前索引里的全部符号名（排序后）
+    QStringList names() const;
+
 private:
     void indexFile(const QString& path);
     void indexIncludes(const QString& path, const QStringList& includeDirs);

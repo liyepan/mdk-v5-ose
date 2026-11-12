@@ -2,6 +2,7 @@
 
 #include <QFont>
 #include <QPlainTextEdit>
+#include <QSet>
 #include <QTextCursor>
 
 #include <functional>
@@ -35,6 +36,24 @@ public:
 
     // 判断某个标识符能不能跳转（由主窗口接上符号表）
     void setSymbolChecker(std::function<bool(const QString&)> checker);
+
+    // 编辑操作
+    void indentSelection();
+    void unindentSelection();
+    void commentSelection();
+    void uncommentSelection();
+    bool findNextText(const QString& text, bool forward = true);
+
+    // 书签
+    void toggleBookmarkAtCursor();
+    void removeBookmarkAtCursor();
+    void gotoNextBookmark();
+    void gotoPrevBookmark();
+
+    // 断点（只做标记，调试器还没接）
+    void toggleBreakpointAtCursor();
+    void removeBreakpointAtCursor();
+    void clearBreakpoints();
 
     // 字号缩放（高 DPI 屏上真正管用的那个"缩放"）
     void  setZoomPointSize(qreal pointSize);
@@ -76,6 +95,8 @@ private:
     qreal           m_pointSize = 0.0;
     QString         m_encoding = QStringLiteral("UTF-8");
     QTextCursor     m_hoverCursor;
+    QSet<int>       m_bookmarks;      // 块号
+    QSet<int>       m_breakpoints;    // 块号
     std::function<bool(const QString&)> m_symbolChecker;
     QString         m_filePath;
     bool            m_assembly = false;
