@@ -33,6 +33,8 @@
 | Create Library | CreateLib=1 时走 armar --create，Target 名为 Lib 的那类配置可用 |
 | Before/After Make | BeforeCompile / BeforeMake / AfterMake 里的用户命令，
 连 UserProg1Dos16Mode、nStopA1X 的语义都保留；PATH 自动带上工具链目录 |
+| MicroLIB | useUlib=1 时同时给编译器/汇编器定义 __MICROLIB，并给链接器 --library_type=microlib
+（漏了定义会得到 L6218E: __initial_sp / __heap_base / __heap_limit） |
 | AC5 选项 | --c99/--c90、--gnu(uGnu)、--apcs=interwork、--split_sections、--strict、
 --enum_is_int、--plain_char、--library_type=microlib、--no_stdlib 等 |
 | 产物 | .axf / .hex / .bin / .lib，Program Size 从 armlink map 的 Grand Totals 解析 |

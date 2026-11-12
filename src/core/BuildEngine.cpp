@@ -315,7 +315,14 @@ QStringList BuildEngine::compileArgs(const ProjGroup& group, const ProjFile& fil
         a << QStringLiteral("-c");
     }
 
-    for (const QString& d : mergeDefines(group, file))
+    // Use MicroLIB 时 Keil 会同时定义 __MICROLIB：
+    // 启动文件里 __initial_sp / __heap_base / __heap_limit 的 EXPORT
+    // 就在 IF :DEF:__MICROLIB 里面，不定义它链接时就会报 L6218E。
+    QStringList defines = mergeDefines(group, file);
+    if (t && t->useMicrolib && !defines.contains(QStringLiteral("__MICROLIB")))
+        defines.prepend(QStringLiteral("__MICROLIB"));
+
+    for (const QString& d : defines)
         a << (QStringLiteral("-D") + d);
 
     // C / C++ 用 Target 的 C/C++ 页 include，汇编用 Asm 页的（两者在 uVision 里是分开的）
@@ -349,6 +356,10 @@ QStringList BuildEngine::assembleArgs(const ProjGroup& group, const ProjFile& fi
         defines += splitOptionList(group.defines);
     if (file.hasOwnOptions)
         defines += splitOptionList(file.defines);
+
+    // 启动文件靠这个开关决定导出哪一组堆栈符号，漏了就报 L6218E
+    if (t && t->useMicrolib && !defines.contains(QStringLiteral("__MICROLIB")))
+        defines.prepend(QStringLiteral("__MICROLIB"));
 
     for (const QString& d : defines) {
         const int eq = d.indexOf(QLatin1Char('='));
