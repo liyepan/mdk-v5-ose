@@ -537,13 +537,14 @@ QDockWidget::title { background: #eef2f7; color: #333b45; padding: 6px 10px;
 QTabWidget { background: #e9edf2; }
 QTabWidget::pane { background: #ffffff; border: 1px solid #c9d2dc; }
 QTabBar { background: transparent; }
-QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 2px 12px 2px 10px; margin-right: 2px;
+QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 2px 10px 2px 10px; margin-right: 2px;
                border: 1px solid #d8dee6; border-bottom: none;
-               border-top-left-radius: 6px; border-top-right-radius: 6px; min-height: 18px; }
+               border-top-left-radius: 6px; border-top-right-radius: 6px; }
 QTabBar::tab:selected { background: #ffffff; color: #1f2328;
                         border-color: #c9d2dc; border-bottom: none; }
 QTabBar::tab:hover:!selected { background: #e4e9f0; }
-QTabBar QToolButton { padding: 0px; border: none; border-radius: 4px; margin-left: 6px; }
+QTabBar QToolButton { padding: 0px; margin: 0px; border: none; border-radius: 4px;
+                      min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px; }
 QTabBar QToolButton:hover { background: #fbdad8; }
 QTabBar::close-button { border-radius: 4px; }
 

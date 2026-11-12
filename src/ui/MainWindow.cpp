@@ -654,7 +654,7 @@ void MainWindow::createToolBars()
         if (action && action == m_symbolComboAnchor) {
             m_symbolCombo = new QComboBox(mainBar);
             m_symbolCombo->setFixedWidth(170);          // 固定长度，不跟着符号名变长
-            m_symbolCombo->setFixedHeight(20);
+            m_symbolCombo->setFixedHeight(21);
             m_symbolCombo->setEditable(true);           // 空的时候也能显示占位文字
             m_symbolCombo->setInsertPolicy(QComboBox::NoInsert);
             m_symbolCombo->lineEdit()->setPlaceholderText(Lang::t("Symbols"));
@@ -683,7 +683,7 @@ void MainWindow::createToolBars()
 
     m_targetCombo = new QComboBox(buildBar);
     m_targetCombo->setFixedWidth(150);
-    m_targetCombo->setFixedHeight(20);
+    m_targetCombo->setFixedHeight(21);
     m_targetCombo->setToolTip(Lang::t("Target"));
     connect(m_targetCombo, QOverload<int>::of(&QComboBox::activated), this,
             &MainWindow::onTargetChanged);
