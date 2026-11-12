@@ -13,6 +13,8 @@
 #include <QStyleOption>
 #include <QtMath>
 
+#include <cmath>
+
 namespace {
 
 // 接管页签 / 停靠窗口的关闭按钮图标（QSS 改不了它们，只能走 style）
@@ -403,6 +405,52 @@ void paintIcon(QPainter& p, const QString& name, int size)
         p.drawEllipse(QRectF(r.left() + 5.5, r.top() + 5.5, 6.0, 6.0));
         p.setPen(QPen(kRed.darker(150), 1.4));
         p.drawLine(QPointF(r.left() + 6.0, r.top() + 1.5), QPointF(r.right() - 3.0, r.bottom() - 2.0));
+    } else if (name == QLatin1String("clean")) {
+        // 清理：垃圾桶
+        p.setPen(QPen(QColor(0x55, 0x5b, 0x63), 1));
+        p.setBrush(QColor(0xd8, 0xdd, 0xe3));
+        p.drawRect(QRectF(r.left() + 4.0, r.top() + 3.0, 6.5, 9.0));
+        p.setBrush(QColor(0xb9, 0xc1, 0xca));
+        p.drawRect(QRectF(r.left() + 3.0, r.top() + 1.5, 8.5, 2.0));
+        p.drawLine(QPointF(r.left() + 6.0, r.top() + 1.5), QPointF(r.left() + 6.0, r.top() + 0.5));
+    } else if (name == QLatin1String("download")) {
+        // 下载到 Flash：向下箭头 + 芯片底座
+        p.setPen(QPen(kGreen.darker(120), 1.6, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(r.center().x(), r.top() + 1.0), QPointF(r.center().x(), r.bottom() - 5.0));
+        p.drawLine(QPointF(r.center().x(), r.bottom() - 5.0), QPointF(r.center().x() - 3.0, r.bottom() - 8.0));
+        p.drawLine(QPointF(r.center().x(), r.bottom() - 5.0), QPointF(r.center().x() + 3.0, r.bottom() - 8.0));
+        p.setPen(QPen(QColor(0x5a, 0x62, 0x6c), 1));
+        p.setBrush(QColor(0xc9, 0xd1, 0xd9));
+        p.drawRect(QRectF(r.left() + 2.5, r.bottom() - 3.0, 9.5, 2.6));
+    } else if (name == QLatin1String("wand")) {
+        // 魔术棒：Options for Target
+        p.setPen(QPen(QColor(0x7a, 0x52, 0x1c), 2.0, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(r.left() + 2.0, r.bottom() - 2.0), QPointF(r.right() - 4.0, r.top() + 2.0));
+        p.setPen(QPen(QColor(0xe8, 0xb5, 0x3a), 1));
+        p.setBrush(QColor(0xff, 0xd9, 0x4d));
+        QPolygonF star;
+        const QPointF c(r.right() - 3.5, r.top() + 3.5);
+        for (int i = 0; i < 8; ++i) {
+            const double angle = i * 3.14159265358979 / 4.0;
+            const double radius = (i % 2 == 0) ? 3.2 : 1.3;
+            star << QPointF(c.x() + radius * std::cos(angle), c.y() + radius * std::sin(angle));
+        }
+        p.drawPolygon(star);
+    } else if (name == QLatin1String("manage")) {
+        // 工程文件管理：三色方块
+        const qreal s = 4.6;
+        const qreal x0 = r.left() + 1.5;
+        const qreal y0 = r.top() + 2.0;
+        const QColor colors[3] = { QColor(0xd0, 0x38, 0x2c), QColor(0x2e, 0x8b, 0x34),
+                                   QColor(0x1f, 0x5f, 0xbf) };
+        for (int i = 0; i < 3; ++i) {
+            p.setPen(QPen(colors[i].darker(140), 1));
+            p.setBrush(colors[i]);
+            p.drawRect(QRectF(x0 + (i % 2) * (s + 1.0), y0 + (i / 2) * (s + 1.0), s, s));
+        }
+        p.setPen(QPen(QColor(0x8a, 0x93, 0x9e), 1));
+        p.setBrush(QColor(0xe9, 0xed, 0xf2));
+        p.drawRect(QRectF(x0 + (s + 1.0), y0 + (s + 1.0), s, s));
     } else if (name == QLatin1String("close")) {
         // 细一点的圆头叉号，比 Fusion 自带的方块 X 好看
         QPen pen(QColor(0x7b, 0x84, 0x91), 1.5, Qt::SolidLine, Qt::RoundCap);
@@ -514,6 +562,7 @@ QLineEdit, QComboBox, QSpinBox { background: #ffffff; border: 1px solid #cfd6df;
                                  border-radius: 6px; padding: 4px 8px; }
 QLineEdit:focus, QComboBox:focus { border-color: #0b57d0; }
 QComboBox::drop-down { border: none; width: 18px; }
+QToolBar QComboBox { padding: 0px 6px; margin: 1px 0px; min-height: 20px; max-height: 22px; }
 QPushButton { background: #ffffff; border: 1px solid #cfd6df; border-radius: 6px; padding: 5px 14px; }
 QPushButton:hover { background: #f2f5f9; }
 QPushButton:pressed { background: #e4e9f0; }

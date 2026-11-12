@@ -101,6 +101,7 @@ private:
     void createActions();
     void createMainToolbarActions();
     void populateSymbolCombo();
+    void populateTargetCombo();
     void recordNavigation(const QString& file, int line);
     void createMenus();
     void createToolBars();
@@ -163,6 +164,8 @@ private:
 
     QList<QAction*> m_mainBarActions;   // nullptr = 分隔线
     QComboBox*      m_symbolCombo = nullptr;
+    QComboBox*      m_targetCombo = nullptr;
+    bool            m_updatingTargets = false;
     QAction*        m_symbolComboAnchor = nullptr;
     QList<NavPoint> m_navHistory;
     int             m_navIndex = -1;

@@ -41,6 +41,7 @@ const QHash<QString, QString>& dictionary()
         add("Find Next", QStringLiteral("当前文件查找下一个"));
         add("Find", QStringLiteral("查找"));
         add("Symbols", QStringLiteral("符号"));
+        add("Manage Project Items", QStringLiteral("工程文件管理"));
         add("Insert Breakpoint", QStringLiteral("插入断点"));
         add("Delete Breakpoint", QStringLiteral("删除断点"));
         add("Delete All Breakpoints (Target)", QStringLiteral("清空当前 Target 的断点"));

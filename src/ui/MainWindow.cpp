@@ -252,7 +252,9 @@ void MainWindow::createActions()
     m_actTranslate->setToolTip(Lang::t("Translate current file (Ctrl+F7)"));
     connect(m_actTranslate, &QAction::triggered, this, &MainWindow::onTranslate);
 
-    m_actClean = new QAction(Lang::t("Clean targets"), this);
+    m_actClean = new QAction(KeilStyle::icon(QStringLiteral("clean")),
+                             Lang::t("Clean targets"), this);
+    m_actClean->setToolTip(Lang::t("Clean targets"));
     connect(m_actClean, &QAction::triggered, this, &MainWindow::onClean);
 
     m_actStop = new QAction(KeilStyle::icon(QStringLiteral("stop")),
@@ -269,14 +271,18 @@ void MainWindow::createActions()
                                Lang::t("Save All"), this);
     connect(m_actSaveAll, &QAction::triggered, this, &MainWindow::onSaveAll);
 
-    m_actOptionsTarget = new QAction(Lang::t("Options for Target..."), this);
+    m_actOptionsTarget = new QAction(KeilStyle::icon(QStringLiteral("wand")),
+                                     Lang::t("Options for Target..."), this);
+    m_actOptionsTarget->setToolTip(Lang::t("Options for Target..."));
     m_actOptionsTarget->setShortcut(QKeySequence(Qt::ALT + Qt::Key_F7));
     connect(m_actOptionsTarget, &QAction::triggered, this, &MainWindow::onOptionsForTarget);
 
     m_actCloseProject = new QAction(Lang::t("Close Project"), this);
     connect(m_actCloseProject, &QAction::triggered, this, &MainWindow::onCloseProject);
 
-    m_actDownload = new QAction(Lang::t("Download to Flash"), this);
+    m_actDownload = new QAction(KeilStyle::icon(QStringLiteral("download")),
+                                Lang::t("Download to Flash"), this);
+    m_actDownload->setToolTip(Lang::t("Download to Flash"));
     m_actDownload->setShortcut(QKeySequence(Qt::Key_F8));
     connect(m_actDownload, &QAction::triggered, this, &MainWindow::onDownload);
 }
@@ -657,42 +663,39 @@ void MainWindow::createToolBars()
             mainBar->addAction(action);
     }
 
-    // ---- 第 2 排：构建（Translate / Build / Rebuild / Batch / Stop）----
+    // ---- 第 2 排：检查 / 编译 / 重新编译 / 清理 / 下载 / Target / 魔术棒 / 工程管理 ----
     QToolBar* buildBar = makeBar(QStringLiteral("Build"));
-    buildBar->addAction(m_actTranslate);
-    buildBar->addAction(m_actBuild);
-    buildBar->addAction(m_actRebuild);
-    buildBar->addAction(m_actBatchBuild);
+
+    buildBar->addAction(m_actTranslate);      // 检查代码：编译当前文件
+    buildBar->addAction(m_actBuild);          // 增量编译 F7
+    buildBar->addAction(m_actRebuild);        // 重新编译
+    buildBar->addAction(m_actClean);          // 清理
     buildBar->addSeparator();
-    buildBar->addAction(m_actStop);
+    buildBar->addAction(m_actDownload);       // 下载到 Flash F8
+    buildBar->addSeparator();
 
-    // ---- 第 3 排：调试（和 uVision 同序）----
-    QToolBar* debugBar = makeBar(QStringLiteral("Debug"));
+    m_targetCombo = new QComboBox(buildBar);
+    m_targetCombo->setMinimumWidth(150);
+    m_targetCombo->setFixedHeight(22);
+    m_targetCombo->setToolTip(Lang::t("Target"));
+    connect(m_targetCombo, QOverload<int>::of(&QComboBox::activated), this,
+            &MainWindow::onTargetChanged);
+    buildBar->addWidget(m_targetCombo);
 
-    auto addDebugAction = [this, debugBar](const QString& icon, const QString& text,
-                                           const QKeySequence& shortcut, bool enabled = false) {
-        QAction* a = new QAction(KeilStyle::icon(icon), text, this);
-        a->setToolTip(text);
-        if (!shortcut.isEmpty())
-            a->setShortcut(shortcut);
-        a->setEnabled(enabled);
-        connect(a, &QAction::triggered, this, &MainWindow::onDebugPlaceholder);
-        debugBar->addAction(a);
-        return a;
-    };
+    buildBar->addAction(m_actOptionsTarget);  // 魔术棒
+    buildBar->addSeparator();
 
-    // Start/Stop 和断点按钮已经在第一排了，这里只放执行控制
-    addDebugAction(QStringLiteral("run"), Lang::t("Run"), QKeySequence(Qt::Key_F5));
-    addDebugAction(QStringLiteral("stop"), Lang::t("Stop"), QKeySequence());
-    debugBar->addSeparator();
-    addDebugAction(QStringLiteral("step"), Lang::t("Step"), QKeySequence(Qt::Key_F11));
-    addDebugAction(QStringLiteral("stepover"), Lang::t("Step Over"), QKeySequence(Qt::Key_F10));
-    addDebugAction(QStringLiteral("stepout"), Lang::t("Step Out"),
-                   QKeySequence(Qt::SHIFT + Qt::Key_F11));
-    addDebugAction(QStringLiteral("runtocursor"), Lang::t("Run to Cursor Line"),
-                   QKeySequence(Qt::CTRL + Qt::Key_F10));
-    debugBar->addSeparator();
-    addDebugAction(QStringLiteral("reset"), Lang::t("Reset"), QKeySequence());
+    auto* manage = new QAction(KeilStyle::icon(QStringLiteral("manage")),
+                               Lang::t("Manage Project Items"), this);
+    manage->setToolTip(Lang::t("Manage Project Items"));
+    connect(manage, &QAction::triggered, this, [this]() {
+        QMessageBox::information(
+            this, Lang::t("Manage Project Items"),
+            QStringLiteral("工程的分组/文件增删还没实现，先在 Keil 里改 .uvprojx。"));
+    });
+    buildBar->addAction(manage);
+
+    populateTargetCombo();
 }
 
 void MainWindow::createDocks()
@@ -877,6 +880,7 @@ void MainWindow::applyProject()
     m_symbols.clear();
     m_navHistory.clear();
     m_navIndex = -1;
+    populateTargetCombo();
     populateSymbolCombo();
 
     updateWindowTitle();
@@ -901,10 +905,34 @@ void MainWindow::onCloseProject()
 
 void MainWindow::onTargetChanged(int index)
 {
+    if (m_updatingTargets || index < 0)
+        return;
+
+    m_updatingTargets = true;
     m_activeTarget = index;
     m_symbols.clear();
     m_engine->setProject(m_project, m_activeTarget);
+
+    // 工程树和工具栏的两个下拉框互相同步
+    if (m_projectTree)
+        m_projectTree->setCurrentTargetIndex(index);
+    if (m_targetCombo && m_targetCombo->currentIndex() != index)
+        m_targetCombo->setCurrentIndex(index);
+
+    populateSymbolCombo();
     updateWindowTitle();
+    m_updatingTargets = false;
+}
+
+void MainWindow::populateTargetCombo()
+{
+    if (!m_targetCombo)
+        return;
+
+    m_targetCombo->clear();
+    for (const Target& target : m_project.targets)
+        m_targetCombo->addItem(target.name);
+    m_targetCombo->setCurrentIndex(m_project.isValid() ? m_activeTarget : -1);
 }
 
 void MainWindow::updateWindowTitle()
