@@ -86,7 +86,9 @@ private:
     QString cpuName() const;
 
     QStringList targetIncludeDirs() const;
-    QStringList mergeIncludeDirs(const ProjGroup& group, const ProjFile& file) const;
+    QStringList targetAsmIncludeDirs() const;
+    QStringList mergeIncludeDirs(const QStringList& base, const ProjGroup& group,
+                                 const ProjFile& file) const;
     QStringList mergeDefines(const ProjGroup& group, const ProjFile& file) const;
 
     QStringList compileArgs(const ProjGroup& group, const ProjFile& file,

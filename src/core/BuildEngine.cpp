@@ -208,9 +208,22 @@ QStringList BuildEngine::targetIncludeDirs() const
     return out;
 }
 
-QStringList BuildEngine::mergeIncludeDirs(const ProjGroup& group, const ProjFile& file) const
+QStringList BuildEngine::targetAsmIncludeDirs() const
 {
-    QStringList out = targetIncludeDirs();
+    const Target* t = currentTarget();
+    if (!t)
+        return QStringList();
+
+    QStringList out;
+    for (const QString& inc : splitOptionList(t->asmIncludePaths))
+        out << toAbsolute(projectDir(), inc);
+    return out;
+}
+
+QStringList BuildEngine::mergeIncludeDirs(const QStringList& base, const ProjGroup& group,
+                                          const ProjFile& file) const
+{
+    QStringList out = base;
 
     if (group.hasOwnOptions) {
         for (const QString& inc : splitOptionList(group.includePaths))
@@ -292,7 +305,8 @@ QStringList BuildEngine::compileArgs(const ProjGroup& group, const ProjFile& fil
     for (const QString& d : mergeDefines(group, file))
         a << (QStringLiteral("-D") + d);
 
-    for (const QString& inc : mergeIncludeDirs(group, file))
+    // C / C++ 用 Target 的 C/C++ 页 include，汇编用 Asm 页的（两者在 uVision 里是分开的）
+    for (const QString& inc : mergeIncludeDirs(targetIncludeDirs(), group, file))
         a << (QStringLiteral("-I") + native(inc));
 
     if (t && !t->miscControls.trimmed().isEmpty())
@@ -331,7 +345,7 @@ QStringList BuildEngine::assembleArgs(const ProjGroup& group, const ProjFile& fi
             a << QStringLiteral("--pd") << (d + QStringLiteral(" SETA 1"));
     }
 
-    for (const QString& inc : mergeIncludeDirs(group, file))
+    for (const QString& inc : mergeIncludeDirs(targetAsmIncludeDirs(), group, file))
         a << (QStringLiteral("-I") + native(inc));
 
     if (t && !t->asmMisc.trimmed().isEmpty())
@@ -696,7 +710,11 @@ void BuildEngine::prepareBuild(bool rebuildAll)
 
             const QByteArray signature = signatureOf(job.args);
             const bool upToDate =
-                !rebuildAll && isUpToDate(src, obj, signature, mergeIncludeDirs(g, f));
+                !rebuildAll
+                && isUpToDate(src, obj, signature,
+                              mergeIncludeDirs(kind == FileKind::Assembly ? targetAsmIncludeDirs()
+                                                                          : targetIncludeDirs(),
+                                               g, f));
 
             m_signatures.insert(obj, QString::fromLatin1(signature));
             m_signaturesDirty = true;
