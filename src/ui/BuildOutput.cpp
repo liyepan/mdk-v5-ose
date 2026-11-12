@@ -15,6 +15,8 @@
 #include <QTabWidget>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <QTextCharFormat>
+#include <QTextDocument>
 #include <QTextStream>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -22,6 +24,85 @@
 #include <functional>
 
 namespace {
+
+// 一次构建输出里各种行的角色，决定颜色
+enum class LogKind { Normal, Dim, Header, Error, Warning, Info, Command, Size, Success };
+
+LogKind classifyLine(const QString& line)
+{
+    Diagnostic d;
+    if (Diagnostics::parseLine(line, QString(), &d)) {
+        switch (d.severity) {
+        case Severity::Error:   return LogKind::Error;
+        case Severity::Warning: return LogKind::Warning;
+        default:                return LogKind::Info;
+        }
+    }
+
+    if (line.startsWith(QLatin1String("*** Executing:")))
+        return LogKind::Command;
+    // 注意：中文不能用 QLatin1String（会按 Latin-1 解码，匹配不上）
+    if (line.startsWith(QLatin1String("*** Error")) || line.contains(QStringLiteral("链接失败"))
+        || line.contains(QStringLiteral("用户命令失败")))
+        return LogKind::Error;
+    if (line.startsWith(QLatin1String("*** Warning")) || line.contains(QStringLiteral("已忽略")))
+        return LogKind::Warning;
+    if (line.startsWith(QLatin1String("Build started"))
+        || line.startsWith(QLatin1String("Clean started"))
+        || line.startsWith(QLatin1String("Clean finished"))
+        || line.startsWith(QLatin1String("*** Using Compiler"))
+        || line.startsWith(QLatin1String("Build target")))
+        return LogKind::Header;
+    if (line.startsWith(QLatin1String("compiling "))
+        || line.startsWith(QLatin1String("assembling ")))
+        return LogKind::Dim;
+    if (line.startsWith(QLatin1String("Program Size:")))
+        return LogKind::Size;
+    if (line.contains(QLatin1String("Error(s),")) && line.contains(QLatin1String("Warning(s)")))
+        return line.contains(QLatin1String(" 0 Error(s)")) ? LogKind::Success : LogKind::Error;
+    return LogKind::Normal;
+}
+
+QTextCharFormat formatForLine(const QString& line)
+{
+    QTextCharFormat fmt;
+
+    switch (classifyLine(line)) {
+    case LogKind::Dim:
+        fmt.setForeground(QColor(0x6b, 0x72, 0x80));
+        break;
+    case LogKind::Header:
+        fmt.setForeground(QColor(0x0b, 0x57, 0xd0));
+        fmt.setFontWeight(QFont::DemiBold);
+        break;
+    case LogKind::Error:
+        fmt.setForeground(QColor(0xb4, 0x23, 0x18));
+        fmt.setFontWeight(QFont::DemiBold);
+        break;
+    case LogKind::Warning:
+        fmt.setForeground(QColor(0xb2, 0x5e, 0x09));
+        break;
+    case LogKind::Info:
+        fmt.setForeground(QColor(0x6b, 0x72, 0x80));
+        break;
+    case LogKind::Command:
+        fmt.setForeground(QColor(0x82, 0x50, 0xdf));
+        break;
+    case LogKind::Size:
+        fmt.setForeground(QColor(0x1a, 0x7f, 0x37));
+        fmt.setFontWeight(QFont::DemiBold);
+        break;
+    case LogKind::Success:
+        fmt.setForeground(QColor(0x1a, 0x7f, 0x37));
+        fmt.setFontWeight(QFont::DemiBold);
+        break;
+    case LogKind::Normal:
+    default:
+        fmt.setForeground(QColor(0x1f, 0x23, 0x28));
+        break;
+    }
+    return fmt;
+}
 
 const int kRoleFile = Qt::UserRole;
 const int kRoleLine = Qt::UserRole + 1;
@@ -159,7 +240,13 @@ void BuildOutput::clear()
 
 void BuildOutput::appendLine(const QString& line)
 {
-    m_log->appendPlainText(line);
+    // 用光标插入而不是 appendPlainText，才能按行类型上色
+    QTextCursor cursor(m_log->document());
+    cursor.movePosition(QTextCursor::End);
+    if (!m_log->document()->isEmpty())
+        cursor.insertBlock();
+    cursor.insertText(line, formatForLine(line));
+
     QScrollBar* sb = m_log->verticalScrollBar();
     sb->setValue(sb->maximum());
 }

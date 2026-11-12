@@ -73,6 +73,10 @@
 - 解析 .uvprojx（多 Target / Group / File / C-C++ / Linker / 钩子），写回时原地改 DOM
 - 工程树、Target 切换、双击打开源文件、语法高亮、行号、当前行高亮
 - Options for Target：Output / C/C++ / Linker 三页可回写工程
+- Build Output 按类别着色：标题蓝、编译灰、Warning 琥珀、Error 红加粗、Program Size 绿、
+  用户命令紫、汇总行成功绿/失败红
+- 现代浅色主题（Fusion + QSS）：页签强调线、工具栏 hover、圆角输入框、细滚动条，
+  Windows 下用 Segoe UI
 - Build Output / Error List：Ctrl+A 全选、Ctrl+C 复制选中、Ctrl+Shift+C 复制全部，
   右键菜单还有 Clear / Save Output As；复制的是编译器原始行，可以直接贴回 Keil 或邮件
 - 命令行：--build <uvprojx> [--toolchain <dir>] [--target <index>] [--rebuild] [-j N]，可进 CI

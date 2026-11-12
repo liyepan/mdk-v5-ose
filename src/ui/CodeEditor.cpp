@@ -216,7 +216,7 @@ void CodeEditor::highlightCurrentLine()
     QList<QTextEdit::ExtraSelection> selections;
     if (!isReadOnly()) {
         QTextEdit::ExtraSelection selection;
-        selection.format.setBackground(QColor(0xea, 0xf2, 0xfb));
+        selection.format.setBackground(QColor(0xf2, 0xf7, 0xff));
         selection.format.setProperty(QTextFormat::FullWidthSelection, true);
         selection.cursor = textCursor();
         selection.cursor.clearSelection();
@@ -235,8 +235,8 @@ void CodeEditor::onCursorMoved()
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent* event)
 {
     QPainter painter(m_lineNumberArea);
-    painter.fillRect(event->rect(), QColor(0xf2, 0xf2, 0xf2));
-    painter.setPen(QColor(0xc0, 0xc0, 0xc0));
+    painter.fillRect(event->rect(), QColor(0xfa, 0xfb, 0xfc));
+    painter.setPen(QColor(0xe8, 0xea, 0xed));
     painter.drawLine(event->rect().topRight(), event->rect().bottomRight());
 
     QTextBlock block = firstVisibleBlock();
@@ -244,7 +244,7 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent* event)
     int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
     int bottom = top + qRound(blockBoundingRect(block).height());
 
-    painter.setPen(QColor(0x80, 0x80, 0x80));
+    painter.setPen(QColor(0xa0, 0xa7, 0xb2));
 
     while (block.isValid() && top <= event->rect().bottom()) {
         if (block.isVisible() && bottom >= event->rect().top()) {

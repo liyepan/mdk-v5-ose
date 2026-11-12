@@ -257,16 +257,103 @@ QIcon makeIcon(const QString& name, int size)
 
 namespace KeilStyle {
 
+QString styleSheet()
+{
+    return QString::fromUtf8(R"QSS(
+QWidget { color: #1f2328; }
+QMainWindow, QDialog { background: #f6f7f9; }
+
+QMenuBar { background: #ffffff; border-bottom: 1px solid #e5e7eb; padding: 2px 4px; }
+QMenuBar::item { background: transparent; padding: 5px 10px; border-radius: 5px; }
+QMenuBar::item:selected { background: #eef2f7; }
+QMenuBar::item:pressed { background: #e2e8f0; }
+
+QMenu { background: #ffffff; border: 1px solid #e5e7eb; padding: 5px; }
+QMenu::item { padding: 6px 28px 6px 22px; border-radius: 5px; }
+QMenu::item:selected { background: #eaf1fd; color: #0b57d0; }
+QMenu::item:disabled { color: #a0a7b2; }
+QMenu::separator { height: 1px; background: #eef0f3; margin: 5px 10px; }
+
+QToolBar { background: #ffffff; border: none; border-bottom: 1px solid #e5e7eb;
+           spacing: 3px; padding: 3px 6px; }
+QToolBar::separator { width: 1px; background: #e5e7eb; margin: 4px 6px; }
+QToolButton { background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px; }
+QToolButton:hover { background: #eef2f7; border-color: #e0e5ec; }
+QToolButton:pressed { background: #dfe6ef; }
+QToolButton:checked { background: #e4edfb; border-color: #c9dcf7; }
+
+QDockWidget { color: #414751; }
+QDockWidget::title { background: #f2f4f7; padding: 6px 10px;
+                     border: 1px solid #e5e7eb; border-bottom-color: #eef0f3;
+                     border-top-left-radius: 6px; border-top-right-radius: 6px; }
+
+QTabWidget::pane { border: 1px solid #e5e7eb; border-top: none; background: #ffffff; }
+QTabBar::tab { background: #f2f4f7; color: #57606a; padding: 7px 16px; margin-right: 2px;
+               border: 1px solid #e5e7eb; border-bottom: none;
+               border-top-left-radius: 7px; border-top-right-radius: 7px; }
+QTabBar::tab:selected { background: #ffffff; color: #0b57d0; border-bottom: 2px solid #0b57d0; }
+QTabBar::tab:hover:!selected { background: #e9eef5; }
+
+QTreeWidget, QTreeView, QListView, QTableView { background: #ffffff; border: none; outline: 0; }
+QTreeView::item { padding: 3px 2px; }
+QTreeView::item:hover { background: #f4f7fb; }
+QTreeView::item:selected { background: #e6effc; color: #10233f; }
+QHeaderView::section { background: #f7f8fa; color: #57606a; padding: 5px 6px;
+                       border: none; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #eef0f3; }
+
+QLineEdit, QComboBox, QSpinBox { background: #ffffff; border: 1px solid #d7dce3;
+                                 border-radius: 6px; padding: 4px 8px; }
+QLineEdit:focus, QComboBox:focus { border-color: #0b57d0; }
+QComboBox::drop-down { border: none; width: 18px; }
+QPushButton { background: #ffffff; border: 1px solid #d7dce3; border-radius: 6px; padding: 5px 14px; }
+QPushButton:hover { background: #f3f6fa; }
+QPushButton:pressed { background: #e8edf4; }
+QPushButton:default { background: #0b57d0; border-color: #0b57d0; color: #ffffff; }
+QPushButton:default:hover { background: #0a4cba; }
+
+QPlainTextEdit, QTextEdit { background: #ffffff; border: none;
+                            selection-background-color: #cfe3ff; selection-color: #10233f; }
+
+QScrollBar:vertical { background: transparent; width: 11px; margin: 0; }
+QScrollBar::handle:vertical { background: #c9d0d9; border-radius: 5px; min-height: 32px; }
+QScrollBar::handle:vertical:hover { background: #aeb7c2; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+QScrollBar:horizontal { background: transparent; height: 11px; margin: 0; }
+QScrollBar::handle:horizontal { background: #c9d0d9; border-radius: 5px; min-width: 32px; }
+QScrollBar::handle:horizontal:hover { background: #aeb7c2; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
+
+QStatusBar { background: #ffffff; border-top: 1px solid #e5e7eb; }
+QStatusBar::item { border: none; }
+QStatusBar QLabel { color: #57606a; padding: 0 10px; }
+
+QCheckBox::indicator { width: 15px; height: 15px; }
+QGroupBox { border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 10px; padding-top: 8px; }
+QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #57606a; }
+)QSS");
+}
+
 void apply(QApplication& app)
 {
-#if !defined(Q_OS_WIN)
+    // 统一用 Fusion 打底：QSS 在 Windows 的 vista 样式上会花得厉害
     if (QStyle* fusion = QStyleFactory::create(QStringLiteral("Fusion")))
         app.setStyle(fusion);
-#endif
+
+#if defined(Q_OS_WIN)
+    QFont f(QStringLiteral("Segoe UI"));
+    f.setPointSizeF(9.5);
+    if (!QFontDatabase().families().contains(QStringLiteral("Segoe UI")))
+        f = app.font();
+#else
     QFont f = app.font();
     if (f.pointSizeF() < 9.0)
-        f.setPointSizeF(9.0);
+        f.setPointSizeF(9.5);
+#endif
     app.setFont(f);
+
+    app.setStyleSheet(styleSheet());
 }
 
 QFont uiFont()

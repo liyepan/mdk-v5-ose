@@ -8,32 +8,33 @@ CSyntaxHighlighter::CSyntaxHighlighter(QTextDocument* document, bool assembly)
 
 void CSyntaxHighlighter::buildRules(bool assembly)
 {
+    // 现代浅色配色：关键字蓝、类型青、预处理紫、字符串绿、数字橙、注释灰
     QTextCharFormat keyword;
-    keyword.setForeground(QColor(0x00, 0x00, 0xc0));
-    keyword.setFontWeight(QFont::Bold);
+    keyword.setForeground(QColor(0x05, 0x50, 0xae));
+    keyword.setFontWeight(QFont::DemiBold);
 
     QTextCharFormat type;
-    type.setForeground(QColor(0x00, 0x70, 0x90));
+    type.setForeground(QColor(0x26, 0x7f, 0x99));
 
     QTextCharFormat preproc;
-    preproc.setForeground(QColor(0x80, 0x00, 0x80));
+    preproc.setForeground(QColor(0x82, 0x50, 0xdf));
 
     QTextCharFormat string;
-    string.setForeground(QColor(0xa3, 0x15, 0x15));
+    string.setForeground(QColor(0x0a, 0x7d, 0x33));
 
     QTextCharFormat number;
-    number.setForeground(QColor(0x09, 0x86, 0x58));
+    number.setForeground(QColor(0xb3, 0x5c, 0x00));
 
     m_commentFormat = QTextCharFormat();
-    m_commentFormat.setForeground(QColor(0x00, 0x80, 0x00));
+    m_commentFormat.setForeground(QColor(0x7a, 0x82, 0x8e));
     m_commentFormat.setFontItalic(true);
 
     m_multilineFormat = QTextCharFormat();
-    m_multilineFormat.setForeground(QColor(0x00, 0x80, 0x00));
+    m_multilineFormat.setForeground(QColor(0x7a, 0x82, 0x8e));
     m_multilineFormat.setFontItalic(true);
 
     m_doxygenFormat = QTextCharFormat();
-    m_doxygenFormat.setForeground(QColor(0x55, 0x80, 0x55));
+    m_doxygenFormat.setForeground(QColor(0x98, 0xa1, 0xab));
     m_doxygenFormat.setFontItalic(true);
 
     if (assembly) {

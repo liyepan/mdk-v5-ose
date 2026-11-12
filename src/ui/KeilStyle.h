@@ -13,6 +13,9 @@ namespace KeilStyle {
 
 void    apply(QApplication& app);
 
+// 现代浅色主题的样式表（Fusion 基础上叠加）
+QString styleSheet();
+
 QFont   uiFont();
 QFont   editorFont();
 
