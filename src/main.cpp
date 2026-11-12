@@ -1,4 +1,5 @@
 #include "core/BuildEngine.h"
+#include "core/Lang.h"
 #include "core/Settings.h"
 #include "core/Toolchain.h"
 #include "core/UvprojReader.h"
@@ -130,6 +131,8 @@ int main(int argc, char* argv[])
     app.setOrganizationName(QStringLiteral("linuxacme"));
     app.setApplicationName(QStringLiteral("mdk-v5-ose"));
     app.setApplicationDisplayName(QStringLiteral("uVision5-OSE"));
+
+    Lang::set(Lang::idFromString(Settings::instance().language()));
 
     KeilStyle::apply(app);
 

@@ -1,4 +1,5 @@
 #include "ui/OptionsDialog.h"
+#include "core/Lang.h"
 
 #include "ui/KeilStyle.h"
 
@@ -22,7 +23,7 @@ OptionsDialog::OptionsDialog(const Target& target, const QString& projectDir, QW
     : QDialog(parent)
     , m_target(target)
 {
-    setWindowTitle(QStringLiteral("Options for Target '%1'").arg(target.name));
+    setWindowTitle(Lang::t("Options for Target '%1'").arg(target.name));
     setModal(true);
     buildUi(projectDir);
     loadFromTarget();
@@ -52,12 +53,12 @@ void OptionsDialog::buildUi(const QString& projectDir)
         auto* pack = new QLineEdit(m_target.packId);
         pack->setReadOnly(true);
 
-        form->addRow(QStringLiteral("Device:"), device);
-        form->addRow(QStringLiteral("Vendor:"), vendor);
-        form->addRow(QStringLiteral("CPU:"), cpu);
+        form->addRow(Lang::t("Device:"), device);
+        form->addRow(Lang::t("Vendor:"), vendor);
+        form->addRow(Lang::t("CPU:"), cpu);
         form->addRow(QStringLiteral("Pack (仅显示):"), pack);
 
-        tabs->addTab(page, QStringLiteral("Target"));
+        tabs->addTab(page, Lang::t("Target"));
     }
 
     // ---- Output ----
@@ -68,20 +69,20 @@ void OptionsDialog::buildUi(const QString& projectDir)
         m_outputName = new QLineEdit;
         m_outputDir = new QLineEdit;
         m_listingDir = new QLineEdit;
-        m_createHex = new QCheckBox(QStringLiteral("Create HEX File"));
-        m_debugInfo = new QCheckBox(QStringLiteral("Debug Information"));
-        m_browseInfo = new QCheckBox(QStringLiteral("Browse Information"));
-        m_createLib = new QCheckBox(QStringLiteral("Create Library"));
+        m_createHex = new QCheckBox(Lang::t("Create HEX File"));
+        m_debugInfo = new QCheckBox(Lang::t("Debug Information"));
+        m_browseInfo = new QCheckBox(Lang::t("Browse Information"));
+        m_createLib = new QCheckBox(Lang::t("Create Library"));
 
-        form->addRow(QStringLiteral("Name of Executable:"), m_outputName);
-        form->addRow(QStringLiteral("Output Directory:"), m_outputDir);
-        form->addRow(QStringLiteral("Listing Directory:"), m_listingDir);
+        form->addRow(Lang::t("Name of Executable:"), m_outputName);
+        form->addRow(Lang::t("Output Directory:"), m_outputDir);
+        form->addRow(Lang::t("Listing Directory:"), m_listingDir);
         form->addRow(QString(), m_createHex);
         form->addRow(QString(), m_debugInfo);
         form->addRow(QString(), m_browseInfo);
         form->addRow(QString(), m_createLib);
 
-        tabs->addTab(page, QStringLiteral("Output"));
+        tabs->addTab(page, Lang::t("Output"));
     }
 
     // ---- C/C++ ----
@@ -95,13 +96,13 @@ void OptionsDialog::buildUi(const QString& projectDir)
         m_optimization->addItem(QStringLiteral("Level 2 (-O2)"), 2);
         m_optimization->addItem(QStringLiteral("Level 3 (-O3)"), 3);
 
-        m_c99 = new QCheckBox(QStringLiteral("C99 Mode (--c99)"));
-        m_oneElf = new QCheckBox(QStringLiteral("One ELF Section per Function"));
-        m_strict = new QCheckBox(QStringLiteral("Strict ANSI"));
-        m_enumInt = new QCheckBox(QStringLiteral("Enum as int"));
-        m_plainChar = new QCheckBox(QStringLiteral("Plain char is signed"));
-        m_interwork = new QCheckBox(QStringLiteral("Interworking (--apcs=interwork)"));
-        m_noWarnings = new QCheckBox(QStringLiteral("No Warnings (-W)"));
+        m_c99 = new QCheckBox(Lang::t("C99 Mode (--c99)"));
+        m_oneElf = new QCheckBox(Lang::t("One ELF Section per Function"));
+        m_strict = new QCheckBox(Lang::t("Strict ANSI"));
+        m_enumInt = new QCheckBox(Lang::t("Enum as int"));
+        m_plainChar = new QCheckBox(Lang::t("Plain char is signed"));
+        m_interwork = new QCheckBox(Lang::t("Interworking (--apcs=interwork)"));
+        m_noWarnings = new QCheckBox(Lang::t("No Warnings (-W)"));
 
         m_defines = new QLineEdit;
         m_includes = new QLineEdit;
@@ -109,7 +110,7 @@ void OptionsDialog::buildUi(const QString& projectDir)
         m_defines->setPlaceholderText(QStringLiteral("USE_HAL_DRIVER,STM32F103xB"));
         m_includes->setPlaceholderText(QStringLiteral(".\\Inc;.\\Drivers\\CMSIS\\Include"));
 
-        form->addRow(QStringLiteral("Optimization:"), m_optimization);
+        form->addRow(Lang::t("Optimization:"), m_optimization);
         form->addRow(QString(), m_c99);
         form->addRow(QString(), m_oneElf);
         form->addRow(QString(), m_strict);
@@ -117,11 +118,11 @@ void OptionsDialog::buildUi(const QString& projectDir)
         form->addRow(QString(), m_plainChar);
         form->addRow(QString(), m_interwork);
         form->addRow(QString(), m_noWarnings);
-        form->addRow(QStringLiteral("Define:"), m_defines);
-        form->addRow(QStringLiteral("Include Paths:"), m_includes);
-        form->addRow(QStringLiteral("Misc Controls:"), m_cMisc);
+        form->addRow(Lang::t("Define:"), m_defines);
+        form->addRow(Lang::t("Include Paths:"), m_includes);
+        form->addRow(Lang::t("Misc Controls:"), m_cMisc);
 
-        tabs->addTab(page, QStringLiteral("C/C++"));
+        tabs->addTab(page, Lang::t("C/C++"));
     }
 
     // ---- Linker ----
@@ -129,12 +130,12 @@ void OptionsDialog::buildUi(const QString& projectDir)
         auto* page = new QWidget;
         auto* form = new QFormLayout(page);
 
-        m_useMemoryLayout = new QCheckBox(QStringLiteral("Use Memory Layout from Target Dialog"));
+        m_useMemoryLayout = new QCheckBox(Lang::t("Use Memory Layout from Target Dialog"));
         m_textAddr = new QLineEdit;
         m_dataAddr = new QLineEdit;
         m_scatter = new QLineEdit;
-        m_microlib = new QCheckBox(QStringLiteral("Use MicroLIB"));
-        m_noStdLib = new QCheckBox(QStringLiteral("Don't search Standard Libraries"));
+        m_microlib = new QCheckBox(Lang::t("Use MicroLIB"));
+        m_noStdLib = new QCheckBox(Lang::t("Don't search Standard Libraries"));
         m_linkerMisc = new QLineEdit;
 
         auto* scatterRow = new QWidget;
@@ -147,21 +148,21 @@ void OptionsDialog::buildUi(const QString& projectDir)
 
         connect(browse, &QPushButton::clicked, this, [this]() {
             const QString f = QFileDialog::getOpenFileName(
-                this, QStringLiteral("Select Scatter File"), QString(),
-                QStringLiteral("Scatter Files (*.sct);;All Files (*)"));
+                this, Lang::t("Select Scatter File"), QString(),
+                Lang::t("Scatter Files (*.sct);;All Files (*)"));
             if (!f.isEmpty())
                 m_scatter->setText(f);
         });
 
         form->addRow(QString(), m_useMemoryLayout);
-        form->addRow(QStringLiteral("IROM1 Start:"), m_textAddr);
-        form->addRow(QStringLiteral("IRAM1 Start:"), m_dataAddr);
-        form->addRow(QStringLiteral("Scatter File:"), scatterRow);
+        form->addRow(Lang::t("IROM1 Start:"), m_textAddr);
+        form->addRow(Lang::t("IRAM1 Start:"), m_dataAddr);
+        form->addRow(Lang::t("Scatter File:"), scatterRow);
         form->addRow(QString(), m_microlib);
         form->addRow(QString(), m_noStdLib);
-        form->addRow(QStringLiteral("Misc Controls:"), m_linkerMisc);
+        form->addRow(Lang::t("Misc Controls:"), m_linkerMisc);
 
-        tabs->addTab(page, QStringLiteral("Linker"));
+        tabs->addTab(page, Lang::t("Linker"));
     }
 
     // ---- Debug ----
@@ -259,7 +260,7 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
     : QDialog(parent)
     , m_toolchain(current)
 {
-    setWindowTitle(QStringLiteral("Configure Toolchain"));
+    setWindowTitle(Lang::t("Configure Toolchain"));
     setModal(true);
 
     auto* layout = new QVBoxLayout(this);
@@ -275,12 +276,12 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
     m_family->addItem(QStringLiteral("AC6 (armclang)"), QStringLiteral("AC6"));
     m_family->setCurrentIndex(current.family == QLatin1String("AC6") ? 1 : 0);
 
-    auto* browseButton = new QPushButton(QStringLiteral("Browse..."));
+    auto* browseButton = new QPushButton(Lang::t("Browse..."));
     dirLayout->addWidget(m_dir, 1);
     dirLayout->addWidget(browseButton);
 
-    form->addRow(QStringLiteral("Compiler Folder:"), dirRow);
-    form->addRow(QStringLiteral("Family:"), m_family);
+    form->addRow(Lang::t("Compiler Folder:"), dirRow);
+    form->addRow(Lang::t("Family:"), m_family);
     layout->addLayout(form);
 
     auto* hint = new QLabel(
@@ -312,7 +313,7 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
 void ToolchainDialog::browse()
 {
     const QString dir = QFileDialog::getExistingDirectory(
-        this, QStringLiteral("Select ARM Compiler bin folder"), m_dir->text());
+        this, Lang::t("Select ARM Compiler bin folder"), m_dir->text());
     if (!dir.isEmpty())
         m_dir->setText(QDir::toNativeSeparators(dir));
 }
@@ -323,7 +324,7 @@ void ToolchainDialog::refreshStatus()
     m_toolchain = Toolchain::detect(m_dir->text().trimmed(), family);
 
     if (m_toolchain.isValid()) {
-        m_status->setText(QStringLiteral("Detected: %1    compiler = %2")
+        m_status->setText(Lang::t("Detected: %1    compiler = %2")
                               .arg(m_toolchain.family, m_toolchain.cc));
         m_status->setStyleSheet(QStringLiteral("color: #1a7f37;"));
     } else {

@@ -1,6 +1,7 @@
 #include "core/Settings.h"
 
 #include <QFileInfo>
+#include <QLocale>
 #include <QSettings>
 #include <QThread>
 
@@ -10,6 +11,7 @@ const char* kToolchainFam  = "toolchain/family";
 const char* kLastProject   = "project/last";
 const char* kRecent        = "project/recent";
 const char* kBuildJobs     = "build/jobs";
+const char* kLanguage      = "ui/language";
 const char* kFormatOnSave  = "editor/formatOnSave";
 const char* kClangFormat   = "editor/clangFormatPath";
 const char* kGeometry      = "window/geometry";
@@ -59,6 +61,20 @@ int Settings::buildJobs() const
 void Settings::setBuildJobs(int jobs)
 {
     m_s.setValue(QLatin1String(kBuildJobs), qBound(1, jobs, 64));
+}
+
+QString Settings::language() const
+{
+    // 首次运行跟随系统语言，中文系统直接给中文界面
+    const QString fallback =
+        QLocale::system().language() == QLocale::Chinese ? QStringLiteral("zh")
+                                                         : QStringLiteral("en");
+    return m_s.value(QLatin1String(kLanguage), fallback).toString();
+}
+
+void Settings::setLanguage(const QString& id)
+{
+    m_s.setValue(QLatin1String(kLanguage), id);
 }
 
 bool Settings::formatOnSave() const

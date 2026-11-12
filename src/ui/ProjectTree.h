@@ -27,6 +27,7 @@ signals:
     void fileActivated(const QString& absolutePath);
     void optionsForTargetRequested();
     void optionsForFileRequested(const QString& absolutePath);
+    void openWithEncodingRequested(const QString& absolutePath, const QString& encoding);
 
 private:
     void rebuildTree();

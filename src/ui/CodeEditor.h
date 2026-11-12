@@ -25,6 +25,11 @@ public:
     // 格式化后整体替换，保留撤销栈
     void applyFormattedText(const QString& text);
 
+    // 文件编码：默认 UTF-8，可切 GBK / GB18030 / Big5 / 系统默认
+    QString encoding() const { return m_encoding; }
+    void    setEncoding(const QString& name, bool reloadFromDisk = false);
+    static QStringList encodingChoices();
+
     // 字号缩放（高 DPI 屏上真正管用的那个"缩放"）
     void  setZoomPointSize(qreal pointSize);
     qreal zoomPointSize() const { return m_pointSize; }
@@ -35,6 +40,7 @@ public:
 signals:
     void cursorPositionChanged(int line, int column);
     void zoomRequested(int delta);
+    void encodingChanged(const QString& name);
     // Ctrl+左键点击标识符
     void wordActivated(const QString& word, const QString& filePath);
     // Ctrl+左键点击 #include "x.h"
@@ -45,6 +51,7 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
 
 private slots:
     void updateLineNumberAreaWidth(int newBlockCount);
@@ -58,6 +65,7 @@ private:
 
     LineNumberArea* m_lineNumberArea = nullptr;
     qreal           m_pointSize = 0.0;
+    QString         m_encoding = QStringLiteral("UTF-8");
     QString         m_filePath;
     bool            m_assembly = false;
 };

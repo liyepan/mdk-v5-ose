@@ -1,18 +1,49 @@
 #include "ui/CodeEditor.h"
 
+#include "core/Encoding.h"
 #include "core/UvprojModel.h"
 #include "ui/CSyntaxHighlighter.h"
 #include "ui/KeilStyle.h"
 
+#include <QContextMenuEvent>
 #include <QFile>
 #include <QFileInfo>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QRegularExpression>
 #include <QPainter>
 #include <QTextBlock>
 #include <QTextCodec>
 #include <QTextStream>
+
+namespace {
+
+QTextCodec* codecForEncoding(const QString& name)
+{
+    if (name == QLatin1String("System"))
+        return QTextCodec::codecForLocale();
+    if (QTextCodec* c = QTextCodec::codecForName(name.toLatin1()))
+        return c;
+    return QTextCodec::codecForName("UTF-8");
+}
+
+QString decodeBytes(const QByteArray& raw, const QString& encoding, bool* hasInvalid)
+{
+    QTextCodec* codec = codecForEncoding(encoding);
+    QTextCodec::ConverterState state;
+    const QString text = codec->toUnicode(raw.constData(), raw.size(), &state);
+    if (hasInvalid)
+        *hasInvalid = state.invalidChars > 0;
+    return text;
+}
+
+} // namespace
+
+QStringList CodeEditor::encodingChoices()
+{
+    return Encoding::choices();
+}
 
 // ---------------------------------------------------------------- 行号栏
 
@@ -189,19 +220,27 @@ bool CodeEditor::loadFile(const QString& path, QString* error)
         return false;
     }
 
-    // 自动识别 UTF-8 / 本地编码，避免中文注释在 GBK 工程里乱码
     const QByteArray raw = file.readAll();
     file.close();
 
+    // 默认按 UTF-8 解；解不开再退回系统编码，保证老 GBK 工程也能读
     QString text;
+    QString used = m_encoding;
+
     if (raw.startsWith("\xEF\xBB\xBF")) {
         text = QString::fromUtf8(raw.mid(3));
+        used = QStringLiteral("UTF-8");
     } else {
-        QTextCodec* utf8 = QTextCodec::codecForName("UTF-8");
-        QTextCodec::ConverterState state;
-        text = utf8->toUnicode(raw.constData(), raw.size(), &state);
-        if (state.invalidChars > 0)
-            text = QString::fromLocal8Bit(raw);
+        bool invalid = false;
+        text = decodeBytes(raw, m_encoding, &invalid);
+        if (invalid && m_encoding == QLatin1String("UTF-8")) {
+            bool altInvalid = false;
+            const QString alt = decodeBytes(raw, QStringLiteral("System"), &altInvalid);
+            if (!altInvalid) {
+                text = alt;
+                used = QStringLiteral("System");
+            }
+        }
     }
 
     setPlainText(text);
@@ -209,7 +248,72 @@ bool CodeEditor::loadFile(const QString& path, QString* error)
     document()->setModified(false);
 
     setHighlightAssembly(fileKindFromPath(path) == FileKind::Assembly);
+
+    if (m_encoding != used) {
+        m_encoding = used;
+        emit encodingChanged(m_encoding);
+    }
     return true;
+}
+
+void CodeEditor::setEncoding(const QString& name, bool reloadFromDisk)
+{
+    const QString target = name.isEmpty() ? QStringLiteral("UTF-8") : name;
+
+    if (reloadFromDisk && !m_filePath.isEmpty()) {
+        if (document()->isModified()) {
+            const auto answer = QMessageBox::question(
+                this, QStringLiteral("Encoding"),
+                QStringLiteral("File has unsaved changes. Reload with %1 and lose them?")
+                    .arg(target),
+                QMessageBox::Yes | QMessageBox::No);
+            if (answer != QMessageBox::Yes)
+                return;
+        }
+        m_encoding = target;
+        QString error;
+        loadFile(m_filePath, &error);
+        return;
+    }
+
+    m_encoding = target;
+    emit encodingChanged(m_encoding);
+}
+
+void CodeEditor::contextMenuEvent(QContextMenuEvent* event)
+{
+    QMenu menu(this);
+
+    QAction* actUndo = menu.addAction(QStringLiteral("Undo"));
+    actUndo->setEnabled(document()->isUndoAvailable());
+    connect(actUndo, &QAction::triggered, this, [this]() { undo(); });
+
+    QAction* actRedo = menu.addAction(QStringLiteral("Redo"));
+    actRedo->setEnabled(document()->isRedoAvailable());
+    connect(actRedo, &QAction::triggered, this, [this]() { redo(); });
+
+    menu.addSeparator();
+
+    QAction* actCopy = menu.addAction(QStringLiteral("Copy"));
+    actCopy->setEnabled(textCursor().hasSelection());
+    connect(actCopy, &QAction::triggered, this, [this]() { copy(); });
+
+    QAction* actSelectAll = menu.addAction(QStringLiteral("Select All"));
+    connect(actSelectAll, &QAction::triggered, this, [this]() { selectAll(); });
+
+    menu.addSeparator();
+
+    QMenu* encodingMenu = menu.addMenu(QStringLiteral("Encoding"));
+    for (const QString& name : encodingChoices()) {
+        QAction* action = encodingMenu->addAction(name);
+        action->setCheckable(true);
+        action->setChecked(name == m_encoding);
+        connect(action, &QAction::triggered, this, [this, name]() {
+            setEncoding(name, true);
+        });
+    }
+
+    menu.exec(event->globalPos());
 }
 
 bool CodeEditor::saveFile(QString* error)
@@ -225,7 +329,7 @@ bool CodeEditor::saveFile(QString* error)
     }
 
     QTextStream ts(&file);
-    ts.setCodec("UTF-8");
+    ts.setCodec(codecForEncoding(m_encoding));
     ts << toPlainText();
     ts.flush();
     file.close();

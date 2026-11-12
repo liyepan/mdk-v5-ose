@@ -26,6 +26,7 @@ set(APP_SOURCES
     src/core/Diagnostic.cpp
     src/core/BuildEngine.cpp
     src/core/Formatter.cpp
+    src/core/Lang.cpp
     src/core/SymbolIndex.cpp
     src/ui/KeilStyle.cpp
     src/ui/CSyntaxHighlighter.cpp
@@ -44,6 +45,7 @@ set(APP_HEADERS
     src/core/Diagnostic.h
     src/core/BuildEngine.h
     src/core/Formatter.h
+    src/core/Lang.h
     src/core/SymbolIndex.h
     src/ui/KeilStyle.h
     src/ui/CSyntaxHighlighter.h

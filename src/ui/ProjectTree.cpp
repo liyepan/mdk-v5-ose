@@ -1,5 +1,7 @@
 #include "ui/ProjectTree.h"
+#include "core/Lang.h"
 
+#include "core/Encoding.h"
 #include "core/UvprojReader.h"
 #include "ui/KeilStyle.h"
 
@@ -150,20 +152,32 @@ void ProjectTree::showContextMenu(const QPoint& pos)
 
     const int kind = item ? item->data(0, kRoleKind).toInt() : -1;
 
-    QAction* open = menu.addAction(QStringLiteral("Open"));
+    QAction* open = menu.addAction(Lang::t("Open"));
+
+    QMenu* encodingMenu = menu.addMenu(Lang::t("Encoding"));
+    QList<QAction*> encodingActions;
+    const QStringList encodings = Encoding::choices();
+    for (const QString& name : encodings)
+        encodingActions << encodingMenu->addAction(name);
+
     menu.addSeparator();
-    QAction* fileOptions = menu.addAction(QStringLiteral("Options for File..."));
-    QAction* targetOptions = menu.addAction(QStringLiteral("Options for Target..."));
+    QAction* fileOptions = menu.addAction(Lang::t("Options for File..."));
+    QAction* targetOptions = menu.addAction(Lang::t("Options for Target..."));
 
     open->setEnabled(kind == 2);
+    encodingMenu->setEnabled(kind == 2);
     fileOptions->setEnabled(kind == 2);
 
     QAction* chosen = menu.exec(m_tree->viewport()->mapToGlobal(pos));
     if (!chosen)
         return;
 
+    const int encodingIndex = encodingActions.indexOf(chosen);
     if (chosen == open && kind == 2) {
         activateItem(item);
+    } else if (encodingIndex >= 0 && kind == 2) {
+        emit openWithEncodingRequested(item->data(0, kRolePath).toString(),
+                                       encodings.at(encodingIndex));
     } else if (chosen == fileOptions && kind == 2) {
         emit optionsForFileRequested(item->data(0, kRolePath).toString());
     } else if (chosen == targetOptions) {

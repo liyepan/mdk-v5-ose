@@ -1,4 +1,5 @@
 #include "ui/MainWindow.h"
+#include "core/Lang.h"
 
 #include "core/Formatter.h"
 #include "core/Settings.h"
@@ -138,6 +139,7 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     connect(m_tabs, &QTabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
+    connect(m_tabs, &QTabWidget::currentChanged, this, [this](int) { updateEncodingLabel(); });
 
     m_engine->setJobs(Settings::instance().buildJobs());
 
@@ -155,57 +157,57 @@ MainWindow::~MainWindow() = default;
 void MainWindow::createActions()
 {
     m_actBuild = new QAction(KeilStyle::icon(QStringLiteral("build")),
-                             QStringLiteral("Build Target"), this);
+                             Lang::t("Build Target"), this);
     m_actBuild->setShortcut(QKeySequence(Qt::Key_F7));
-    m_actBuild->setToolTip(QStringLiteral("Build target files (F7)"));
+    m_actBuild->setToolTip(Lang::t("Build target files (F7)"));
     connect(m_actBuild, &QAction::triggered, this, &MainWindow::onBuild);
 
     m_actRebuild = new QAction(KeilStyle::icon(QStringLiteral("rebuild")),
-                               QStringLiteral("Rebuild all target files"), this);
-    m_actRebuild->setToolTip(QStringLiteral("Rebuild all target files"));
+                               Lang::t("Rebuild all target files"), this);
+    m_actRebuild->setToolTip(Lang::t("Rebuild all target files"));
     connect(m_actRebuild, &QAction::triggered, this, &MainWindow::onRebuild);
 
     m_actTranslate = new QAction(KeilStyle::icon(QStringLiteral("translate")),
-                                 QStringLiteral("Translate"), this);
+                                 Lang::t("Translate"), this);
     m_actTranslate->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_F7));
-    m_actTranslate->setToolTip(QStringLiteral("Translate current file (Ctrl+F7)"));
+    m_actTranslate->setToolTip(Lang::t("Translate current file (Ctrl+F7)"));
     connect(m_actTranslate, &QAction::triggered, this, &MainWindow::onTranslate);
 
-    m_actClean = new QAction(QStringLiteral("Clean targets"), this);
+    m_actClean = new QAction(Lang::t("Clean targets"), this);
     connect(m_actClean, &QAction::triggered, this, &MainWindow::onClean);
 
     m_actStop = new QAction(KeilStyle::icon(QStringLiteral("stop")),
-                            QStringLiteral("Stop build"), this);
-    m_actStop->setToolTip(QStringLiteral("Stop build"));
+                            Lang::t("Stop build"), this);
+    m_actStop->setToolTip(Lang::t("Stop build"));
     connect(m_actStop, &QAction::triggered, this, &MainWindow::onStopBuild);
 
     m_actSave = new QAction(KeilStyle::icon(QStringLiteral("save")),
-                            QStringLiteral("Save"), this);
+                            Lang::t("Save"), this);
     m_actSave->setShortcut(QKeySequence::Save);
     connect(m_actSave, &QAction::triggered, this, &MainWindow::onSave);
 
     m_actSaveAll = new QAction(KeilStyle::icon(QStringLiteral("saveall")),
-                               QStringLiteral("Save All"), this);
+                               Lang::t("Save All"), this);
     connect(m_actSaveAll, &QAction::triggered, this, &MainWindow::onSaveAll);
 
-    m_actOptionsTarget = new QAction(QStringLiteral("Options for Target..."), this);
+    m_actOptionsTarget = new QAction(Lang::t("Options for Target..."), this);
     m_actOptionsTarget->setShortcut(QKeySequence(Qt::ALT + Qt::Key_F7));
     connect(m_actOptionsTarget, &QAction::triggered, this, &MainWindow::onOptionsForTarget);
 
-    m_actCloseProject = new QAction(QStringLiteral("Close Project"), this);
+    m_actCloseProject = new QAction(Lang::t("Close Project"), this);
     connect(m_actCloseProject, &QAction::triggered, this, &MainWindow::onCloseProject);
 
-    m_actDownload = new QAction(QStringLiteral("Download to Flash"), this);
+    m_actDownload = new QAction(Lang::t("Download to Flash"), this);
     m_actDownload->setShortcut(QKeySequence(Qt::Key_F8));
     connect(m_actDownload, &QAction::triggered, this, &MainWindow::onDownload);
 }
 
 void MainWindow::createMenus()
 {
-    QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("&File"));
-    fileMenu->addAction(QStringLiteral("New Project..."), this, &MainWindow::onNewProject);
-    fileMenu->addAction(QStringLiteral("Open Project..."), this, &MainWindow::onOpenProject);
-    m_recentMenu = fileMenu->addMenu(QStringLiteral("Recent Projects"));
+    QMenu* fileMenu = menuBar()->addMenu(Lang::t("&File"));
+    fileMenu->addAction(Lang::t("New Project..."), this, &MainWindow::onNewProject);
+    fileMenu->addAction(Lang::t("Open Project..."), this, &MainWindow::onOpenProject);
+    m_recentMenu = fileMenu->addMenu(Lang::t("Recent Projects"));
     connect(m_recentMenu, &QMenu::aboutToShow, this, &MainWindow::buildRecentMenu);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actCloseProject);
@@ -213,92 +215,92 @@ void MainWindow::createMenus()
     fileMenu->addAction(m_actSave);
     fileMenu->addAction(m_actSaveAll);
     fileMenu->addSeparator();
-    fileMenu->addAction(QStringLiteral("Exit"), this, &QWidget::close);
+    fileMenu->addAction(Lang::t("Exit"), this, &QWidget::close);
 
-    QMenu* editMenu = menuBar()->addMenu(QStringLiteral("&Edit"));
-    QAction* undo = editMenu->addAction(QStringLiteral("Undo"));
+    QMenu* editMenu = menuBar()->addMenu(Lang::t("&Edit"));
+    QAction* undo = editMenu->addAction(Lang::t("Undo"));
     undo->setShortcut(QKeySequence::Undo);
     connect(undo, &QAction::triggered, this, [this]() {
         if (currentEditor())
             currentEditor()->undo();
     });
-    QAction* redo = editMenu->addAction(QStringLiteral("Redo"));
+    QAction* redo = editMenu->addAction(Lang::t("Redo"));
     redo->setShortcut(QKeySequence::Redo);
     connect(redo, &QAction::triggered, this, [this]() {
         if (currentEditor())
             currentEditor()->redo();
     });
     editMenu->addSeparator();
-    QAction* cut = editMenu->addAction(QStringLiteral("Cut"));
+    QAction* cut = editMenu->addAction(Lang::t("Cut"));
     cut->setShortcut(QKeySequence::Cut);
     connect(cut, &QAction::triggered, this, [this]() {
         if (currentEditor())
             currentEditor()->cut();
     });
-    QAction* copy = editMenu->addAction(QStringLiteral("Copy"));
+    QAction* copy = editMenu->addAction(Lang::t("Copy"));
     copy->setShortcut(QKeySequence::Copy);
     connect(copy, &QAction::triggered, this, [this]() {
         if (currentEditor())
             currentEditor()->copy();
     });
-    QAction* paste = editMenu->addAction(QStringLiteral("Paste"));
+    QAction* paste = editMenu->addAction(Lang::t("Paste"));
     paste->setShortcut(QKeySequence::Paste);
     connect(paste, &QAction::triggered, this, [this]() {
         if (currentEditor())
             currentEditor()->paste();
     });
     editMenu->addSeparator();
-    QAction* find = editMenu->addAction(QStringLiteral("Find..."));
+    QAction* find = editMenu->addAction(Lang::t("Find..."));
     find->setShortcut(QKeySequence::Find);
     find->setEnabled(false);
-    editMenu->addAction(QStringLiteral("Go to Line..."), this, [this]() {
+    editMenu->addAction(Lang::t("Go to Line..."), this, [this]() {
         bool ok = false;
-        const int line = QInputDialog::getInt(this, QStringLiteral("Go to Line"),
-                                              QStringLiteral("Line:"), 1, 1, 1 << 20, 1, &ok);
+        const int line = QInputDialog::getInt(this, Lang::t("Go to Line"),
+                                              Lang::t("Line:"), 1, 1, 1 << 20, 1, &ok);
         if (ok && currentEditor())
             currentEditor()->gotoLine(line);
     });
 
-    QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("&View"));
-    viewMenu->addAction(QStringLiteral("Project Window"), this, [this]() {
+    QMenu* viewMenu = menuBar()->addMenu(Lang::t("&View"));
+    viewMenu->addAction(Lang::t("Project Window"), this, [this]() {
         m_projectDock->show();
         m_projectDock->raise();
     });
-    viewMenu->addAction(QStringLiteral("Build Output Window"), this, [this]() {
+    viewMenu->addAction(Lang::t("Build Output Window"), this, [this]() {
         m_outputDock->show();
         m_outputDock->raise();
     });
-    viewMenu->addAction(QStringLiteral("Error List Window"), this, [this]() {
+    viewMenu->addAction(Lang::t("Error List Window"), this, [this]() {
         m_outputDock->show();
         m_buildOutput->showErrorList();
     });
     viewMenu->addSeparator();
 
-    QAction* zoomIn = viewMenu->addAction(QStringLiteral("Zoom In"));
+    QAction* zoomIn = viewMenu->addAction(Lang::t("Zoom In"));
     zoomIn->setShortcuts({ QKeySequence::ZoomIn,
                            QKeySequence(Qt::CTRL + Qt::Key_Plus),
                            QKeySequence(Qt::CTRL + Qt::Key_Equal) });
     connect(zoomIn, &QAction::triggered, this, [this]() { changeEditorZoom(1); });
 
-    QAction* zoomOut = viewMenu->addAction(QStringLiteral("Zoom Out"));
+    QAction* zoomOut = viewMenu->addAction(Lang::t("Zoom Out"));
     zoomOut->setShortcuts({ QKeySequence::ZoomOut,
                             QKeySequence(Qt::CTRL + Qt::Key_Minus) });
     connect(zoomOut, &QAction::triggered, this, [this]() { changeEditorZoom(-1); });
 
-    QAction* zoomReset = viewMenu->addAction(QStringLiteral("Reset Zoom"));
+    QAction* zoomReset = viewMenu->addAction(Lang::t("Reset Zoom"));
     zoomReset->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_0));
     connect(zoomReset, &QAction::triggered, this, &MainWindow::resetEditorZoom);
 
     viewMenu->addSeparator();
-    for (const QString& name : { QStringLiteral("Functions Window"),
-                                 QStringLiteral("Source Browser"),
-                                 QStringLiteral("Books Window") }) {
+    for (const QString& name : { Lang::t("Functions Window"),
+                                 Lang::t("Source Browser"),
+                                 Lang::t("Books Window") }) {
         QAction* a = viewMenu->addAction(name);
         a->setEnabled(false);
         a->setToolTip(QStringLiteral("尚未实现"));
     }
 
-    QMenu* projectMenu = menuBar()->addMenu(QStringLiteral("&Project"));
+    QMenu* projectMenu = menuBar()->addMenu(Lang::t("&Project"));
     projectMenu->addAction(m_actOptionsTarget);
     projectMenu->addSeparator();
     projectMenu->addAction(m_actBuild);
@@ -308,16 +310,16 @@ void MainWindow::createMenus()
     projectMenu->addSeparator();
     projectMenu->addAction(m_actCloseProject);
 
-    QMenu* flashMenu = menuBar()->addMenu(QStringLiteral("&Flash"));
+    QMenu* flashMenu = menuBar()->addMenu(Lang::t("&Flash"));
     flashMenu->addAction(m_actDownload);
-    QAction* erase = flashMenu->addAction(QStringLiteral("Erase"));
+    QAction* erase = flashMenu->addAction(Lang::t("Erase"));
     erase->setEnabled(false);
     flashMenu->addSeparator();
-    flashMenu->addAction(QStringLiteral("Configure Toolchain..."),
+    flashMenu->addAction(Lang::t("Configure Toolchain..."),
                          this, &MainWindow::onConfigureToolchain);
 
-    QMenu* debugMenu = menuBar()->addMenu(QStringLiteral("&Debug"));
-    QAction* startDebug = debugMenu->addAction(QStringLiteral("Start/Stop Debug Session"));
+    QMenu* debugMenu = menuBar()->addMenu(Lang::t("&Debug"));
+    QAction* startDebug = debugMenu->addAction(Lang::t("Start/Stop Debug Session"));
     startDebug->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_F5));
     connect(startDebug, &QAction::triggered, this, &MainWindow::onDebugPlaceholder);
 
@@ -330,34 +332,34 @@ void MainWindow::createMenus()
     };
 
     debugMenu->addSeparator();
-    addDebugMenuAction(QStringLiteral("Run"), QKeySequence(Qt::Key_F5));
-    addDebugMenuAction(QStringLiteral("Stop"), QKeySequence());
-    addDebugMenuAction(QStringLiteral("Step"), QKeySequence(Qt::Key_F11));
-    addDebugMenuAction(QStringLiteral("Step Over"), QKeySequence(Qt::Key_F10));
-    addDebugMenuAction(QStringLiteral("Step Out"), QKeySequence(Qt::SHIFT + Qt::Key_F11));
-    addDebugMenuAction(QStringLiteral("Run to Cursor Line"), QKeySequence(Qt::CTRL + Qt::Key_F10));
+    addDebugMenuAction(Lang::t("Run"), QKeySequence(Qt::Key_F5));
+    addDebugMenuAction(Lang::t("Stop"), QKeySequence());
+    addDebugMenuAction(Lang::t("Step"), QKeySequence(Qt::Key_F11));
+    addDebugMenuAction(Lang::t("Step Over"), QKeySequence(Qt::Key_F10));
+    addDebugMenuAction(Lang::t("Step Out"), QKeySequence(Qt::SHIFT + Qt::Key_F11));
+    addDebugMenuAction(Lang::t("Run to Cursor Line"), QKeySequence(Qt::CTRL + Qt::Key_F10));
     debugMenu->addSeparator();
-    for (const QString& name : { QStringLiteral("Breakpoints..."),
-                                 QStringLiteral("Watch Windows"),
-                                 QStringLiteral("Call Stack Window"),
-                                 QStringLiteral("Register Window"),
-                                 QStringLiteral("Memory Window") }) {
+    for (const QString& name : { Lang::t("Breakpoints..."),
+                                 Lang::t("Watch Windows"),
+                                 Lang::t("Call Stack Window"),
+                                 Lang::t("Register Window"),
+                                 Lang::t("Memory Window") }) {
         QAction* a = debugMenu->addAction(name);
         a->setEnabled(false);
         a->setToolTip(QStringLiteral("尚未实现"));
     }
 
-    QMenu* peripheralsMenu = menuBar()->addMenu(QStringLiteral("&Peripherals"));
-    QMenu* systemViewer = peripheralsMenu->addMenu(QStringLiteral("System Viewer"));
+    QMenu* peripheralsMenu = menuBar()->addMenu(Lang::t("&Peripherals"));
+    QMenu* systemViewer = peripheralsMenu->addMenu(Lang::t("System Viewer"));
     QAction* svNote = systemViewer->addAction(QStringLiteral("(需要调试会话，尚未实现)"));
     svNote->setEnabled(false);
 
-    QMenu* toolsMenu = menuBar()->addMenu(QStringLiteral("&Tools"));
-    toolsMenu->addAction(QStringLiteral("Configure Toolchain..."),
+    QMenu* toolsMenu = menuBar()->addMenu(Lang::t("&Tools"));
+    toolsMenu->addAction(Lang::t("Configure Toolchain..."),
                          this, &MainWindow::onConfigureToolchain);
 
     // 并行编译任务数：Auto = 本机逻辑处理器数
-    QMenu* jobsMenu = toolsMenu->addMenu(QStringLiteral("Parallel Build"));
+    QMenu* jobsMenu = toolsMenu->addMenu(Lang::t("Parallel Build"));
     auto* jobsGroup = new QActionGroup(this);
     jobsGroup->setExclusive(true);
 
@@ -375,7 +377,7 @@ void MainWindow::createMenus()
         });
     };
 
-    addJobsAction(QStringLiteral("Auto  (%1 logical threads)")
+    addJobsAction(Lang::t("Auto  (%1 logical threads)")
                       .arg(QThread::idealThreadCount()), 0);
     jobsMenu->addSeparator();
     for (int n : { 1, 2, 4, 8, 16, 32, 64 })
@@ -390,11 +392,11 @@ void MainWindow::createMenus()
     });
 
     toolsMenu->addSeparator();
-    QAction* formatDoc = toolsMenu->addAction(QStringLiteral("Format Document"));
+    QAction* formatDoc = toolsMenu->addAction(Lang::t("Format Document"));
     formatDoc->setShortcut(QKeySequence(Qt::SHIFT + Qt::ALT + Qt::Key_F));
     connect(formatDoc, &QAction::triggered, this, &MainWindow::onFormatDocument);
 
-    QAction* formatOnSave = toolsMenu->addAction(QStringLiteral("Format on Save"));
+    QAction* formatOnSave = toolsMenu->addAction(Lang::t("Format on Save"));
     formatOnSave->setCheckable(true);
     formatOnSave->setChecked(Settings::instance().formatOnSave());
     connect(formatOnSave, &QAction::toggled, this, [](bool enabled) {
@@ -402,15 +404,15 @@ void MainWindow::createMenus()
         Settings::instance().sync();
     });
 
-    QAction* customTools = toolsMenu->addAction(QStringLiteral("Customize Tools Menu..."));
+    QAction* customTools = toolsMenu->addAction(Lang::t("Customize Tools Menu..."));
     customTools->setEnabled(false);
 
-    QMenu* windowMenu = menuBar()->addMenu(QStringLiteral("&Window"));
-    windowMenu->addAction(QStringLiteral("Close All"), this, [this]() {
+    QMenu* windowMenu = menuBar()->addMenu(Lang::t("&Window"));
+    windowMenu->addAction(Lang::t("Close All"), this, [this]() {
         while (m_tabs->count() > 0)
             onTabCloseRequested(m_tabs->count() - 1);
     });
-    windowMenu->addAction(QStringLiteral("Reset Window Layout"), this, [this]() {
+    windowMenu->addAction(Lang::t("Reset Window Layout"), this, [this]() {
         m_projectDock->show();
         m_outputDock->show();
         addDockWidget(Qt::LeftDockWidgetArea, m_projectDock);
@@ -419,8 +421,25 @@ void MainWindow::createMenus()
         resizeDocks({ m_outputDock }, { 180 }, Qt::Vertical);
     });
 
-    QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("&Help"));
-    helpMenu->addAction(QStringLiteral("About uVision5-OSE"), this, &MainWindow::onAbout);
+    windowMenu->addSeparator();
+
+    QMenu* languageMenu = windowMenu->addMenu(Lang::t("Language"));
+    auto* langGroup = new QActionGroup(this);
+    langGroup->setExclusive(true);
+
+    auto addLangAction = [this, languageMenu, langGroup](const QString& text, Lang::Id id) {
+        QAction* a = languageMenu->addAction(text);
+        a->setCheckable(true);
+        a->setChecked(Lang::current() == id);
+        langGroup->addAction(a);
+        connect(a, &QAction::triggered, this,
+                [this, id]() { switchLanguage(static_cast<int>(id)); });
+    };
+    addLangAction(QStringLiteral("English"), Lang::Id::English);
+    addLangAction(QStringLiteral("简体中文"), Lang::Id::Chinese);
+
+    QMenu* helpMenu = menuBar()->addMenu(Lang::t("&Help"));
+    helpMenu->addAction(Lang::t("About uVision5-OSE"), this, &MainWindow::onAbout);
 }
 
 void MainWindow::createToolBars()
@@ -460,23 +479,23 @@ void MainWindow::createToolBars()
         debugBar->addAction(a);
     };
 
-    addDebugAction(QStringLiteral("debug_start"), QStringLiteral("Start/Stop Debug Session"),
+    addDebugAction(QStringLiteral("debug_start"), Lang::t("Start/Stop Debug Session"),
                    QKeySequence(Qt::CTRL + Qt::Key_F5));
-    addDebugAction(QStringLiteral("run"), QStringLiteral("Run"), QKeySequence(Qt::Key_F5));
-    addDebugAction(QStringLiteral("stop"), QStringLiteral("Stop"), QKeySequence());
+    addDebugAction(QStringLiteral("run"), Lang::t("Run"), QKeySequence(Qt::Key_F5));
+    addDebugAction(QStringLiteral("stop"), Lang::t("Stop"), QKeySequence());
     debugBar->addSeparator();
-    addDebugAction(QStringLiteral("step"), QStringLiteral("Step"), QKeySequence(Qt::Key_F11));
-    addDebugAction(QStringLiteral("stepover"), QStringLiteral("Step Over"),
+    addDebugAction(QStringLiteral("step"), Lang::t("Step"), QKeySequence(Qt::Key_F11));
+    addDebugAction(QStringLiteral("stepover"), Lang::t("Step Over"),
                    QKeySequence(Qt::Key_F10));
-    addDebugAction(QStringLiteral("stepout"), QStringLiteral("Step Out"),
+    addDebugAction(QStringLiteral("stepout"), Lang::t("Step Out"),
                    QKeySequence(Qt::SHIFT + Qt::Key_F11));
-    addDebugAction(QStringLiteral("runtocursor"), QStringLiteral("Run to Cursor Line"),
+    addDebugAction(QStringLiteral("runtocursor"), Lang::t("Run to Cursor Line"),
                    QKeySequence(Qt::CTRL + Qt::Key_F10));
 }
 
 void MainWindow::createDocks()
 {
-    m_projectDock = new QDockWidget(QStringLiteral("Project"), this);
+    m_projectDock = new QDockWidget(Lang::t("Project"), this);
     m_projectDock->setObjectName(QStringLiteral("projectDock"));
     // 可关闭、可拖动，但不许浮动（用户明确不要浮动窗口）
     m_projectDock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
@@ -490,8 +509,10 @@ void MainWindow::createDocks()
             this, &MainWindow::onOptionsForTarget);
     connect(m_projectTree, &ProjectTree::optionsForFileRequested,
             this, &MainWindow::onOptionsForFile);
+    connect(m_projectTree, &ProjectTree::openWithEncodingRequested,
+            this, &MainWindow::onOpenWithEncoding);
 
-    m_outputDock = new QDockWidget(QStringLiteral("Build Output"), this);
+    m_outputDock = new QDockWidget(Lang::t("Build Output"), this);
     m_outputDock->setObjectName(QStringLiteral("outputDock"));
     m_outputDock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
     m_buildOutput = new BuildOutput(m_outputDock);
@@ -506,13 +527,16 @@ void MainWindow::createDocks()
 
 void MainWindow::createStatusBar()
 {
-    m_statusMessage = new QLabel(QStringLiteral("Ready"), this);
+    m_statusMessage = new QLabel(Lang::t("Ready"), this);
     statusBar()->addWidget(m_statusMessage, 1);
 
     m_statusToolchain = new QLabel(this);
     statusBar()->addPermanentWidget(m_statusToolchain);
 
-    m_statusPosition = new QLabel(QStringLiteral("Ln 1, Col 1"), this);
+    m_statusEncoding = new QLabel(this);
+    statusBar()->addPermanentWidget(m_statusEncoding);
+
+    m_statusPosition = new QLabel(Lang::t("Ln 1, Col 1"), this);
     statusBar()->addPermanentWidget(m_statusPosition);
 }
 
@@ -521,13 +545,13 @@ void MainWindow::createStatusBar()
 void MainWindow::onNewProject()
 {
     const QString path = QFileDialog::getSaveFileName(
-        this, QStringLiteral("New uVision Project"), QString(),
-        QStringLiteral("uVision Project (*.uvprojx)"));
+        this, Lang::t("New uVision Project"), QString(),
+        Lang::t("uVision Project (*.uvprojx)"));
     if (path.isEmpty())
         return;
 
     if (!createProjectTemplate(path)) {
-        QMessageBox::warning(this, QStringLiteral("New Project"),
+        QMessageBox::warning(this, Lang::t("New Project"),
                              QStringLiteral("无法创建工程文件"));
         return;
     }
@@ -551,9 +575,9 @@ bool MainWindow::createProjectTemplate(const QString& path)
 void MainWindow::onOpenProject()
 {
     const QString path = QFileDialog::getOpenFileName(
-        this, QStringLiteral("Open uVision Project"),
+        this, Lang::t("Open uVision Project"),
         m_project.isValid() ? m_project.directory() : QString(),
-        QStringLiteral("uVision Project (*.uvprojx *.uvproj);;All Files (*)"));
+        Lang::t("uVision Project (*.uvprojx *.uvproj);;All Files (*)"));
     if (!path.isEmpty())
         openProject(path);
 }
@@ -563,7 +587,7 @@ void MainWindow::openProject(const QString& path)
     UvProject project;
     QString error;
     if (!Uvproj::load(path, project, &error)) {
-        QMessageBox::critical(this, QStringLiteral("Open Project"), error);
+        QMessageBox::critical(this, Lang::t("Open Project"), error);
         return;
     }
 
@@ -588,7 +612,7 @@ void MainWindow::applyProject()
     updateWindowTitle();
     setBusy(false);
 
-    m_statusMessage->setText(QStringLiteral("Project '%1' loaded.")
+    m_statusMessage->setText(Lang::t("Project '%1' loaded.")
                                  .arg(QFileInfo(m_project.filePath).fileName()));
 }
 
@@ -620,7 +644,7 @@ void MainWindow::updateWindowTitle()
         const Target* t = m_project.target(m_activeTarget);
         title = QStringLiteral("%1 - %2").arg(m_project.baseName(), t ? t->name : QString());
     } else {
-        title = QStringLiteral("No Project");
+        title = Lang::t("No Project");
     }
     setWindowTitle(title + QStringLiteral(" - uVision5-OSE"));
 }
@@ -647,7 +671,7 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     auto* editor = new CodeEditor(m_tabs);
     QString error;
     if (!editor->loadFile(abs, &error)) {
-        QMessageBox::warning(this, QStringLiteral("Open File"),
+        QMessageBox::warning(this, Lang::t("Open File"),
                              QStringLiteral("无法打开 %1\n%2").arg(abs, error));
         delete editor;
         return nullptr;
@@ -657,6 +681,8 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     connect(editor, &CodeEditor::zoomRequested, this, &MainWindow::changeEditorZoom);
     connect(editor, &CodeEditor::wordActivated, this, &MainWindow::onWordActivated);
     connect(editor, &CodeEditor::includeActivated, this, &MainWindow::onIncludeActivated);
+    connect(editor, &CodeEditor::encodingChanged, this,
+            [this](const QString&) { updateEncodingLabel(); });
 
     if (m_editorZoom > 0.0)
         editor->setZoomPointSize(m_editorZoom);
@@ -664,8 +690,30 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     const int index = m_tabs->addTab(editor, QFileInfo(abs).fileName());
     m_tabs->setTabToolTip(index, abs);
     m_tabs->setCurrentIndex(index);
+    updateEncodingLabel();
 
     return editor;
+}
+
+void MainWindow::onOpenWithEncoding(const QString& path, const QString& encoding)
+{
+    CodeEditor* editor = openFile(path);
+    if (!editor)
+        return;
+
+    editor->setEncoding(encoding, true);
+    updateEncodingLabel();
+}
+
+void MainWindow::updateEncodingLabel()
+{
+    if (!m_statusEncoding)
+        return;
+
+    if (CodeEditor* editor = currentEditor())
+        m_statusEncoding->setText(Lang::t("Encoding: %1").arg(editor->encoding()));
+    else
+        m_statusEncoding->clear();
 }
 
 CodeEditor* MainWindow::currentEditor() const
@@ -678,8 +726,8 @@ void MainWindow::onTabCloseRequested(int index)
     auto* editor = qobject_cast<CodeEditor*>(m_tabs->widget(index));
     if (editor && editor->document()->isModified()) {
         const auto answer = QMessageBox::question(
-            this, QStringLiteral("Save Changes"),
-            QStringLiteral("%1 has been modified. Save changes?").arg(m_tabs->tabText(index)),
+            this, Lang::t("Save Changes"),
+            Lang::t("%1 has been modified. Save changes?").arg(m_tabs->tabText(index)),
             QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
 
         if (answer == QMessageBox::Cancel)
@@ -687,7 +735,7 @@ void MainWindow::onTabCloseRequested(int index)
         if (answer == QMessageBox::Save) {
             QString error;
             if (!editor->saveFile(&error)) {
-                QMessageBox::warning(this, QStringLiteral("Save"), error);
+                QMessageBox::warning(this, Lang::t("Save"), error);
                 return;
             }
         }
@@ -718,7 +766,7 @@ bool MainWindow::saveEditor(CodeEditor* editor)
 
     QString error;
     if (!editor->saveFile(&error)) {
-        QMessageBox::warning(this, QStringLiteral("Save"), error);
+        QMessageBox::warning(this, Lang::t("Save"), error);
         return false;
     }
     return true;
@@ -757,7 +805,7 @@ void MainWindow::onSaveAll()
         if (editor && editor->document()->isModified()) {
             QString error;
             if (!editor->saveFile(&error))
-                QMessageBox::warning(this, QStringLiteral("Save"), error);
+                QMessageBox::warning(this, Lang::t("Save"), error);
         }
     }
 }
@@ -786,7 +834,7 @@ void MainWindow::resetEditorZoom()
 
 void MainWindow::onCursorMoved(int line, int column)
 {
-    m_statusPosition->setText(QStringLiteral("Ln %1, Col %2").arg(line).arg(column));
+    m_statusPosition->setText(Lang::t("Ln %1, Col %2").arg(line).arg(column));
 }
 
 void MainWindow::ensureSymbolIndex()
@@ -883,7 +931,7 @@ void MainWindow::buildRecentMenu()
         connect(a, &QAction::triggered, this, [this, path]() { openProject(path); });
     }
     if (recent.isEmpty()) {
-        QAction* empty = m_recentMenu->addAction(QStringLiteral("(empty)"));
+        QAction* empty = m_recentMenu->addAction(Lang::t("(empty)"));
         empty->setEnabled(false);
     }
 }
@@ -916,12 +964,48 @@ void MainWindow::reloadToolchain()
     updateCompilerStatus();
 }
 
+void MainWindow::switchLanguage(int id)
+{
+    const Lang::Id target = static_cast<Lang::Id>(id);
+    if (Lang::current() == target)
+        return;
+
+    Lang::set(target);
+    Settings::instance().setLanguage(Lang::idToString(target));
+    Settings::instance().sync();
+
+    retranslateUi();
+}
+
+void MainWindow::retranslateUi()
+{
+    // 菜单和工具栏都是启动时一次性建的，切换语言就整体重建
+    menuBar()->clear();
+    createMenus();
+
+    const QList<QToolBar*> bars = findChildren<QToolBar*>();
+    for (QToolBar* bar : bars) {
+        removeToolBar(bar);
+        bar->deleteLater();
+    }
+    createToolBars();
+
+    m_projectDock->setWindowTitle(Lang::t("Project"));
+    m_outputDock->setWindowTitle(Lang::t("Build Output"));
+
+    m_statusMessage->setText(Lang::t("Ready"));
+    m_statusPosition->setText(Lang::t("Ln 1, Col 1"));
+    updateEncodingLabel();
+    updateCompilerStatus();
+    updateWindowTitle();
+}
+
 void MainWindow::updateCompilerStatus()
 {
     const QString compiler = m_toolchain.isValid()
-                                 ? QStringLiteral("Compiler: %1").arg(m_toolchain.family)
-                                 : QStringLiteral("Compiler: not configured");
-    m_statusToolchain->setText(QStringLiteral("%1  |  Jobs: %2")
+                                 ? Lang::t("Compiler: %1").arg(m_toolchain.family)
+                                 : Lang::t("Compiler: not configured");
+    m_statusToolchain->setText(Lang::t("%1  |  Jobs: %2")
                                    .arg(compiler)
                                    .arg(m_engine->jobs()));
 }
@@ -957,21 +1041,21 @@ void MainWindow::onOptionsForTarget()
 
     QString error;
     if (!Uvproj::saveTarget(m_project.filePath, edited, &error)) {
-        QMessageBox::warning(this, QStringLiteral("Options for Target"), error);
+        QMessageBox::warning(this, Lang::t("Options for Target"), error);
         return;
     }
 
     *target = edited;
     m_engine->setProject(m_project, m_activeTarget);
     m_projectTree->setProject(m_project, m_activeTarget);
-    m_statusMessage->setText(QStringLiteral("Options saved."));
+    m_statusMessage->setText(Lang::t("Options saved."));
 }
 
 void MainWindow::onOptionsForFile(const QString& path)
 {
     Q_UNUSED(path);
     QMessageBox::information(
-        this, QStringLiteral("Options for File"),
+        this, Lang::t("Options for File"),
         QStringLiteral("文件级选项的编辑界面将在下一步补上。\n"
                        "当前可以在 Options for Target 里设置公共选项。"));
 }
@@ -995,7 +1079,7 @@ void MainWindow::onBuild()
 void MainWindow::onRebuild()
 {
     if (!m_project.isValid()) {
-        QMessageBox::information(this, QStringLiteral("Rebuild"),
+        QMessageBox::information(this, Lang::t("Rebuild"),
                                  QStringLiteral("请先打开一个 .uvprojx 工程。"));
         return;
     }
@@ -1017,7 +1101,7 @@ void MainWindow::onTranslate()
 
     CodeEditor* editor = currentEditor();
     if (!editor) {
-        QMessageBox::information(this, QStringLiteral("Translate"),
+        QMessageBox::information(this, Lang::t("Translate"),
                                  QStringLiteral("请先打开一个源文件。"));
         return;
     }
@@ -1045,7 +1129,7 @@ void MainWindow::onStopBuild()
 void MainWindow::onDownload()
 {
     QMessageBox::information(
-        this, QStringLiteral("Download"),
+        this, Lang::t("Download"),
         QStringLiteral("烧写功能将在下一步接入（OpenOCD/pyOCD + CMSIS-DAP）。\n"
                        "当前可以先生成 HEX/BIN。"));
 }
@@ -1068,9 +1152,9 @@ void MainWindow::onEngineDiagnostic(const Diagnostic& d)
 void MainWindow::onEngineFinished(bool success, int errors, int warnings)
 {
     setBusy(false);
-    m_statusMessage->setText(QStringLiteral("%1 - %2 Error(s), %3 Warning(s)")
-                                 .arg(success ? QStringLiteral("Build succeeded")
-                                              : QStringLiteral("Build failed"))
+    m_statusMessage->setText(Lang::t("%1 - %2 Error(s), %3 Warning(s)")
+                                 .arg(success ? Lang::t("Build succeeded")
+                                              : Lang::t("Build failed"))
                                  .arg(errors)
                                  .arg(warnings));
     if (!success)
@@ -1092,7 +1176,7 @@ void MainWindow::setBusy(bool busy)
 void MainWindow::onAbout()
 {
     QMessageBox::about(
-        this, QStringLiteral("About uVision5-OSE"),
+        this, Lang::t("About uVision5-OSE"),
         QStringLiteral("<h3>uVision5-OSE</h3>"
                        "<p>一个开源的 uVision5 风格嵌入式 IDE 前端。</p>"
                        "<p>本程序不分发 ARM Compiler。请自行安装 Keil MDK 并在 "

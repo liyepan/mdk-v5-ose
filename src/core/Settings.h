@@ -27,6 +27,10 @@ public:
     int  buildJobs() const;
     void setBuildJobs(int jobs);
 
+    // ---- 界面语言： "en" / "zh" ----
+    QString language() const;
+    void setLanguage(const QString& id);
+
     // ---- 编辑器 ----
     bool formatOnSave() const;
     void setFormatOnSave(bool enabled);

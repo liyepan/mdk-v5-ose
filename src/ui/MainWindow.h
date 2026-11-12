@@ -3,6 +3,7 @@
 #include <QMainWindow>
 
 #include "core/BuildEngine.h"
+#include "core/Lang.h"
 #include "core/SymbolIndex.h"
 #include "core/Toolchain.h"
 #include "core/UvprojModel.h"
@@ -56,8 +57,12 @@ private slots:
     void onEngineFinished(bool success, int errors, int warnings);
 
     void onFormatDocument();
+    void switchLanguage(int id);
+    void retranslateUi();
     void onWordActivated(const QString& word, const QString& filePath);
     void onIncludeActivated(const QString& includeName, const QString& filePath);
+    void onOpenWithEncoding(const QString& path, const QString& encoding);
+    void updateEncodingLabel();
 
     void onJumpTo(const QString& file, int line);
     void onCursorMoved(int line, int column);
@@ -111,6 +116,7 @@ private:
 
     QLabel* m_statusMessage = nullptr;
     QLabel* m_statusToolchain = nullptr;
+    QLabel* m_statusEncoding = nullptr;
     QLabel* m_statusPosition = nullptr;
 
     QAction* m_actBuild = nullptr;
