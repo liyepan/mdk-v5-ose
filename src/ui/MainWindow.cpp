@@ -176,7 +176,9 @@ MainWindow::MainWindow(QWidget* parent)
     m_tabs = tabs;
     tabs->setTabBar(new FileTabBar(tabs));
     m_tabs->setIconSize(QSize(12, 12));
-    m_tabs->setTabsClosable(false);   // 关闭按钮自己画，比 Fusion 自带的方块 X 好看
+    // 用 Qt 自带的关闭按钮（位置由 QTabBar 自己算，天然居中），
+    // 图标已经在 AppStyle::standardIcon 里换成我们画的细叉号
+    m_tabs->setTabsClosable(true);
     m_tabs->setMovable(true);
     m_tabs->setDocumentMode(true);
     setCentralWidget(m_tabs);
@@ -798,7 +800,6 @@ void MainWindow::onNewFile()
     const int index = m_tabs->addTab(editor, QStringLiteral("untitled%1").arg(++untitledCounter));
     m_tabs->setCurrentIndex(index);
     m_tabs->tabBar()->setTabData(index, nextTabColor());
-    attachTabCloseButton(index, editor);
     editor->setFocus();
     updateEncodingLabel();
 }
@@ -1026,8 +1027,6 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     if (!m_fileTabColors.contains(abs))
         m_fileTabColors.insert(abs, nextTabColor());
     m_tabs->tabBar()->setTabData(index, m_fileTabColors.value(abs));
-
-    attachTabCloseButton(index, editor);
     m_tabs->setCurrentIndex(index);
     updateEncodingLabel();
 
@@ -1090,28 +1089,6 @@ void MainWindow::revealBuildOutput()
     // 构建/清理一触发就把输出窗口顶出来，哪怕上一次被手动关掉过
     m_outputDock->show();
     m_outputDock->raise();
-}
-
-void MainWindow::attachTabCloseButton(int index, CodeEditor* editor)
-{
-    // 自绘关闭按钮：图标是自己的，尺寸也更紧凑
-    auto* closeButton = new QToolButton(m_tabs->tabBar());
-    closeButton->setIcon(KeilStyle::icon(QStringLiteral("close"), 16));
-    closeButton->setIconSize(QSize(12, 12));
-    closeButton->setAutoRaise(true);
-    closeButton->setCursor(Qt::ArrowCursor);
-    closeButton->setToolTip(QStringLiteral("Close"));
-    connect(closeButton, &QToolButton::clicked, this, [this, editor]() {
-        QMetaObject::invokeMethod(
-            this,
-            [this, editor]() {
-                const int idx = m_tabs->indexOf(editor);
-                if (idx >= 0)
-                    onTabCloseRequested(idx);
-            },
-            Qt::QueuedConnection);
-    });
-    m_tabs->tabBar()->setTabButton(index, QTabBar::RightSide, closeButton);
 }
 
 // ---------------------------------------------------------------- 第一排操作

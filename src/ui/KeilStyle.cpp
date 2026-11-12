@@ -543,8 +543,8 @@ QTabBar::tab { background: #eef1f5; color: #4b5563; padding: 2px 10px 2px 10px; 
 QTabBar::tab:selected { background: #ffffff; color: #1f2328;
                         border-color: #c9d2dc; border-bottom: none; }
 QTabBar::tab:hover:!selected { background: #e4e9f0; }
-QTabBar QToolButton { padding: 0px; margin: 0px; border: none; border-radius: 4px;
-                      min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px; }
+QTabBar::close-button { subcontrol-position: right; subcontrol-origin: padding;
+                        border-radius: 4px; margin-left: 4px; }
 QTabBar QToolButton:hover { background: #fbdad8; }
 QTabBar::close-button { border-radius: 4px; }
 
