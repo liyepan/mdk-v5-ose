@@ -27,6 +27,14 @@ public:
     int  buildJobs() const;
     void setBuildJobs(int jobs);
 
+    // ---- 编辑器 ----
+    bool formatOnSave() const;
+    void setFormatOnSave(bool enabled);
+
+    // 空表示自动探测
+    QString clangFormatPath() const;
+    void setClangFormatPath(const QString& path);
+
     // ---- 最近打开的工程 ----
     QString lastProject() const;
     void setLastProject(const QString& path);

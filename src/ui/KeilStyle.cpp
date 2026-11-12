@@ -385,9 +385,13 @@ QFont uiFont()
 QFont editorFont()
 {
 #if defined(Q_OS_WIN)
-    QFont f(QStringLiteral("Courier New"), 10);
-    if (!QFontDatabase().families().contains(QStringLiteral("Courier New")))
-        f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    // Consolas 比 Courier New 清晰得多，是 Win7+ 自带的
+    QFont f(QStringLiteral("Consolas"));
+    f.setPointSizeF(10.5);
+    if (!QFontDatabase().families().contains(QStringLiteral("Consolas"))) {
+        f = QFont(QStringLiteral("Courier New"));
+        f.setPointSizeF(10.0);
+    }
 #else
     QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     f.setPointSizeF(10.0);

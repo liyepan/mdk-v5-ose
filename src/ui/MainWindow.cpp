@@ -1,5 +1,6 @@
 #include "ui/MainWindow.h"
 
+#include "core/Formatter.h"
 #include "core/Settings.h"
 #include "core/UvprojReader.h"
 #include "ui/BuildOutput.h"
@@ -388,6 +389,19 @@ void MainWindow::createMenus()
         }
     });
 
+    toolsMenu->addSeparator();
+    QAction* formatDoc = toolsMenu->addAction(QStringLiteral("Format Document"));
+    formatDoc->setShortcut(QKeySequence(Qt::SHIFT + Qt::ALT + Qt::Key_F));
+    connect(formatDoc, &QAction::triggered, this, &MainWindow::onFormatDocument);
+
+    QAction* formatOnSave = toolsMenu->addAction(QStringLiteral("Format on Save"));
+    formatOnSave->setCheckable(true);
+    formatOnSave->setChecked(Settings::instance().formatOnSave());
+    connect(formatOnSave, &QAction::toggled, this, [](bool enabled) {
+        Settings::instance().setFormatOnSave(enabled);
+        Settings::instance().sync();
+    });
+
     QAction* customTools = toolsMenu->addAction(QStringLiteral("Customize Tools Menu..."));
     customTools->setEnabled(false);
 
@@ -464,7 +478,8 @@ void MainWindow::createDocks()
 {
     m_projectDock = new QDockWidget(QStringLiteral("Project"), this);
     m_projectDock->setObjectName(QStringLiteral("projectDock"));
-    m_projectDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    // 可关闭、可拖动，但不许浮动（用户明确不要浮动窗口）
+    m_projectDock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
     m_projectTree = new ProjectTree(m_projectDock);
     m_projectDock->setWidget(m_projectTree);
     addDockWidget(Qt::LeftDockWidgetArea, m_projectDock);
@@ -478,7 +493,7 @@ void MainWindow::createDocks()
 
     m_outputDock = new QDockWidget(QStringLiteral("Build Output"), this);
     m_outputDock->setObjectName(QStringLiteral("outputDock"));
-    m_outputDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    m_outputDock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
     m_buildOutput = new BuildOutput(m_outputDock);
     m_outputDock->setWidget(m_buildOutput);
     addDockWidget(Qt::BottomDockWidgetArea, m_outputDock);
@@ -568,6 +583,7 @@ void MainWindow::applyProject()
 
     m_projectTree->setProject(m_project, m_activeTarget);
     m_buildOutput->setProjectDir(m_project.directory());
+    m_symbols.clear();
 
     updateWindowTitle();
     setBusy(false);
@@ -592,6 +608,7 @@ void MainWindow::onCloseProject()
 void MainWindow::onTargetChanged(int index)
 {
     m_activeTarget = index;
+    m_symbols.clear();
     m_engine->setProject(m_project, m_activeTarget);
     updateWindowTitle();
 }
@@ -638,6 +655,8 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
 
     connect(editor, &CodeEditor::cursorPositionChanged, this, &MainWindow::onCursorMoved);
     connect(editor, &CodeEditor::zoomRequested, this, &MainWindow::changeEditorZoom);
+    connect(editor, &CodeEditor::wordActivated, this, &MainWindow::onWordActivated);
+    connect(editor, &CodeEditor::includeActivated, this, &MainWindow::onIncludeActivated);
 
     if (m_editorZoom > 0.0)
         editor->setZoomPointSize(m_editorZoom);
@@ -681,11 +700,54 @@ void MainWindow::onTabCloseRequested(int index)
 
 void MainWindow::onSave()
 {
-    if (CodeEditor* editor = currentEditor()) {
-        QString error;
-        if (!editor->saveFile(&error))
-            QMessageBox::warning(this, QStringLiteral("Save"), error);
+    CodeEditor* editor = currentEditor();
+    if (!editor)
+        return;
+
+    // Ctrl+S = 先格式化再存盘
+    if (Settings::instance().formatOnSave())
+        formatEditor(editor);
+
+    saveEditor(editor);
+}
+
+bool MainWindow::saveEditor(CodeEditor* editor)
+{
+    if (!editor)
+        return false;
+
+    QString error;
+    if (!editor->saveFile(&error)) {
+        QMessageBox::warning(this, QStringLiteral("Save"), error);
+        return false;
     }
+    return true;
+}
+
+void MainWindow::formatEditor(CodeEditor* editor)
+{
+    if (!editor || editor->filePath().isEmpty())
+        return;
+
+    const Formatter::Result result = Formatter::format(editor->toPlainText(), editor->filePath());
+    if (!result.ok) {
+        m_statusMessage->setText(QStringLiteral("格式化失败: %1").arg(result.error));
+        return;
+    }
+
+    editor->applyFormattedText(result.text);
+
+    if (result.engine == QLatin1String("clang-format"))
+        m_statusMessage->setText(QStringLiteral("已用 clang-format 格式化"));
+    else
+        m_statusMessage->setText(
+            QStringLiteral("已用内置缩进器格式化（%1）").arg(result.error));
+}
+
+void MainWindow::onFormatDocument()
+{
+    if (CodeEditor* editor = currentEditor())
+        formatEditor(editor);
 }
 
 void MainWindow::onSaveAll()
@@ -725,6 +787,77 @@ void MainWindow::resetEditorZoom()
 void MainWindow::onCursorMoved(int line, int column)
 {
     m_statusPosition->setText(QStringLiteral("Ln %1, Col %2").arg(line).arg(column));
+}
+
+void MainWindow::ensureSymbolIndex()
+{
+    if (!m_symbols.isBuilt())
+        m_symbols.build(m_project, m_activeTarget);
+}
+
+QStringList MainWindow::currentIncludeDirs() const
+{
+    QStringList dirs;
+    const Target* target = m_project.target(m_activeTarget);
+    if (!target)
+        return dirs;
+
+    const QString base = m_project.directory();
+    for (const QString& inc : splitOptionList(target->includePaths)) {
+        QString p = inc;
+        p.replace(QLatin1Char('\\'), QLatin1Char('/'));
+        if (!QFileInfo(p).isAbsolute())
+            p = QDir::cleanPath(base + QLatin1Char('/') + p);
+        dirs << p;
+    }
+    return dirs;
+}
+
+void MainWindow::onWordActivated(const QString& word, const QString& fromFile)
+{
+    ensureSymbolIndex();
+
+    const QList<SymbolLocation> hits = m_symbols.lookup(word);
+    if (hits.isEmpty()) {
+        m_statusMessage->setText(QStringLiteral("找不到符号: %1").arg(word));
+        return;
+    }
+
+    // 优先跳到别的文件里的定义，避免原地打转
+    SymbolLocation target = hits.first();
+    for (const SymbolLocation& loc : hits) {
+        if (loc.file != fromFile) {
+            target = loc;
+            break;
+        }
+    }
+
+    if (CodeEditor* editor = openFile(target.file))
+        editor->gotoLine(target.line);
+
+    m_statusMessage->setText(QStringLiteral("%1 → %2 : %3")
+                                 .arg(word, QFileInfo(target.file).fileName())
+                                 .arg(target.line));
+}
+
+void MainWindow::onIncludeActivated(const QString& includeName, const QString& fromFile)
+{
+    const QString local = QDir::cleanPath(QFileInfo(fromFile).absolutePath()
+                                          + QLatin1Char('/') + includeName);
+    if (QFileInfo::exists(local)) {
+        openFile(local);
+        return;
+    }
+
+    for (const QString& dir : currentIncludeDirs()) {
+        const QString candidate = QDir::cleanPath(dir + QLatin1Char('/') + includeName);
+        if (QFileInfo::exists(candidate)) {
+            openFile(candidate);
+            return;
+        }
+    }
+
+    m_statusMessage->setText(QStringLiteral("找不到头文件: %1").arg(includeName));
 }
 
 void MainWindow::onJumpTo(const QString& file, int line)
@@ -855,9 +988,6 @@ void MainWindow::onBuild()
 
     m_buildOutput->clear();
     m_buildOutput->clearDiagnostics();
-    m_outputDock->show();
-    m_outputDock->raise();
-
     setBusy(true);
     m_engine->build(false);
 }
@@ -874,9 +1004,6 @@ void MainWindow::onRebuild()
 
     m_buildOutput->clear();
     m_buildOutput->clearDiagnostics();
-    m_outputDock->show();
-    m_outputDock->raise();
-
     setBusy(true);
     m_engine->build(true);
 }
@@ -897,8 +1024,6 @@ void MainWindow::onTranslate()
 
     m_buildOutput->clear();
     m_buildOutput->clearDiagnostics();
-    m_outputDock->show();
-
     setBusy(true);
     m_engine->translate(editor->filePath());
 }
@@ -909,7 +1034,6 @@ void MainWindow::onClean()
         return;
     m_buildOutput->clear();
     m_buildOutput->clearDiagnostics();
-    m_outputDock->show();
     m_engine->clean();
 }
 

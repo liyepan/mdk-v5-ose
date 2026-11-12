@@ -14,6 +14,8 @@ SOURCES += \
     src/core/Toolchain.cpp \
     src/core/Diagnostic.cpp \
     src/core/BuildEngine.cpp \
+    src/core/Formatter.cpp \
+    src/core/SymbolIndex.cpp \
     src/ui/KeilStyle.cpp \
     src/ui/CSyntaxHighlighter.cpp \
     src/ui/CodeEditor.cpp \
@@ -29,6 +31,8 @@ HEADERS += \
     src/core/Toolchain.h \
     src/core/Diagnostic.h \
     src/core/BuildEngine.h \
+    src/core/Formatter.h \
+    src/core/SymbolIndex.h \
     src/ui/KeilStyle.h \
     src/ui/CSyntaxHighlighter.h \
     src/ui/CodeEditor.h \

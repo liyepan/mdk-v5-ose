@@ -3,6 +3,7 @@
 #include <QMainWindow>
 
 #include "core/BuildEngine.h"
+#include "core/SymbolIndex.h"
 #include "core/Toolchain.h"
 #include "core/UvprojModel.h"
 
@@ -54,6 +55,10 @@ private slots:
     void onEngineDiagnostic(const Diagnostic& d);
     void onEngineFinished(bool success, int errors, int warnings);
 
+    void onFormatDocument();
+    void onWordActivated(const QString& word, const QString& filePath);
+    void onIncludeActivated(const QString& includeName, const QString& filePath);
+
     void onJumpTo(const QString& file, int line);
     void onCursorMoved(int line, int column);
 
@@ -75,6 +80,11 @@ private:
     void changeEditorZoom(int delta);
     void resetEditorZoom();
 
+    void formatEditor(CodeEditor* editor);
+    bool saveEditor(CodeEditor* editor);
+    void ensureSymbolIndex();
+    QStringList currentIncludeDirs() const;
+
     CodeEditor* openFile(const QString& absolutePath);
     CodeEditor* currentEditor() const;
     void        setBusy(bool busy);
@@ -91,6 +101,7 @@ private:
 
     Toolchain   m_toolchain;
     BuildEngine* m_engine = nullptr;
+    SymbolIndex m_symbols;
 
     ProjectTree* m_projectTree = nullptr;
     BuildOutput* m_buildOutput = nullptr;

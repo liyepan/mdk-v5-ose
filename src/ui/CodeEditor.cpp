@@ -7,6 +7,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMenu>
+#include <QMouseEvent>
+#include <QRegularExpression>
 #include <QPainter>
 #include <QTextBlock>
 #include <QTextCodec>
@@ -82,6 +84,81 @@ void CodeEditor::setZoomPointSize(qreal pointSize)
     m_pointSize = clamped;
     applyFont();
     highlightCurrentLine();
+}
+
+void CodeEditor::applyFormattedText(const QString& text)
+{
+    if (text == toPlainText())
+        return;
+
+    const int position = textCursor().position();
+
+    QTextCursor cursor(document());
+    cursor.beginEditBlock();
+    cursor.select(QTextCursor::Document);
+    cursor.insertText(text);
+    cursor.endEditBlock();
+
+    // 尽量把光标放回原处（行变了就夹到文档末尾）
+    QTextCursor restored(document());
+    restored.setPosition(qBound(0, position, qMax(0, document()->characterCount() - 1)));
+    setTextCursor(restored);
+
+    document()->setModified(true);
+}
+
+void CodeEditor::mousePressEvent(QMouseEvent* event)
+{
+    if ((event->modifiers() & Qt::ControlModifier) && event->button() == Qt::LeftButton
+        && !m_filePath.isEmpty()) {
+
+        const QTextCursor cursor = cursorForPosition(event->pos());
+        const QString lineText = cursor.block().text();
+
+        // #include "xxx.h" / <xxx.h>
+        static const QRegularExpression includeRe(
+            QStringLiteral("^[ \t]*#[ \t]*include[ \t]*[<\"]([^>\"]+)[>\"]"));
+        const QRegularExpressionMatch includeMatch = includeRe.match(lineText);
+        if (includeMatch.hasMatch()) {
+            emit includeActivated(includeMatch.captured(1), m_filePath);
+            event->accept();
+            return;
+        }
+
+        // 自己按正则取标识符，比 WordUnderCursor 可靠：
+        // 后者会把 "();" 这种标点也当成一个词
+        static const QRegularExpression identifierRe(
+            QStringLiteral("[A-Za-z_][A-Za-z0-9_]*"));
+
+        const int column = cursor.positionInBlock();
+        QString word;
+        QRegularExpressionMatchIterator it = identifierRe.globalMatch(lineText);
+        while (it.hasNext()) {
+            const QRegularExpressionMatch m = it.next();
+            if (column >= m.capturedStart() && column <= m.capturedEnd()) {
+                word = m.captured();
+                break;
+            }
+        }
+
+        if (!word.isEmpty()) {
+            emit wordActivated(word, m_filePath);
+            event->accept();
+            return;
+        }
+    }
+
+    QPlainTextEdit::mousePressEvent(event);
+}
+
+void CodeEditor::mouseMoveEvent(QMouseEvent* event)
+{
+    if (event->modifiers() & Qt::ControlModifier)
+        viewport()->setCursor(Qt::PointingHandCursor);
+    else
+        viewport()->unsetCursor();
+
+    QPlainTextEdit::mouseMoveEvent(event);
 }
 
 void CodeEditor::wheelEvent(QWheelEvent* event)

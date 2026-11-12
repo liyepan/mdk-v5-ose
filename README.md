@@ -76,7 +76,20 @@
 - Build Output 按类别着色：标题蓝、编译灰、Warning 琥珀、Error 红加粗、Program Size 绿、
   用户命令紫、汇总行成功绿/失败红
 - 现代浅色主题（Fusion + QSS）：页签强调线、工具栏 hover、圆角输入框、细滚动条，
-  Windows 下用 Segoe UI
+  Windows 下用 Segoe UI；编辑器用 Consolas 10.5pt
+
+## 编辑器
+
+- **Ctrl+左键跳转到定义**：扫工程里的 .c/.h 建一个极简符号表（函数定义/声明、宏名），
+  定义优先于声明；点 include 行里的头文件名直接打开该文件
+- **Ctrl+S 自动格式化**：优先调用 clang-format（和 VS Code C/C++ 插件同一个引擎，
+  自动探测 PATH / LLVM / VS Code cpptools 自带的那份）；
+  找不到就退回内置缩进器——它只改行首空白，绝不会改坏语义
+- Shift+Alt+F 手动格式化，Tools -> Format on Save 可关掉边存边格式化
+- 工程里有 .clang-format 就按你的配置来，没有就用内置兜底风格（4 空格、Allman、不限列宽）
+
+语法配色对齐 VS Code Light+：控制关键字紫、声明关键字蓝、类型青、函数名棕、
+全大写宏紫、数字绿、字符串暗红、注释绿斜体。
 - Build Output / Error List：Ctrl+A 全选、Ctrl+C 复制选中、Ctrl+Shift+C 复制全部，
   右键菜单还有 Clear / Save Output As；复制的是编译器原始行，可以直接贴回 Keil 或邮件
 - 命令行：--build <uvprojx> [--toolchain <dir>] [--target <index>] [--rebuild] [-j N]，可进 CI
@@ -133,6 +146,8 @@ CMake 配置阶段会直接报找不到 GL/gl.h。没有的话用 qmake 那条�
 
 ## 已知限制
 
+- 跳转定义是正则扫出来的符号表，不是 clangd：宏拼接、函数指针、同名静态函数可能跳错，
+  重载和结构体成员跳不了。
 - 头文件依赖是"扫 #include"而不是编译器依赖，宏拼出来的头文件名可能漏掉。
 - 对象文件名用 源文件基名.o，重名时加 _2；和 Keil 的命名规则不完全一致。
 - 响应文件（--via）还没做，源文件特别多的工程可能撞 Windows 命令行长度上限。

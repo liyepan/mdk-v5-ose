@@ -10,6 +10,8 @@ const char* kToolchainFam  = "toolchain/family";
 const char* kLastProject   = "project/last";
 const char* kRecent        = "project/recent";
 const char* kBuildJobs     = "build/jobs";
+const char* kFormatOnSave  = "editor/formatOnSave";
+const char* kClangFormat   = "editor/clangFormatPath";
 const char* kGeometry      = "window/geometry";
 const char* kState         = "window/state";
 }
@@ -57,6 +59,26 @@ int Settings::buildJobs() const
 void Settings::setBuildJobs(int jobs)
 {
     m_s.setValue(QLatin1String(kBuildJobs), qBound(1, jobs, 64));
+}
+
+bool Settings::formatOnSave() const
+{
+    return m_s.value(QLatin1String(kFormatOnSave), true).toBool();
+}
+
+void Settings::setFormatOnSave(bool enabled)
+{
+    m_s.setValue(QLatin1String(kFormatOnSave), enabled);
+}
+
+QString Settings::clangFormatPath() const
+{
+    return m_s.value(QLatin1String(kClangFormat)).toString();
+}
+
+void Settings::setClangFormatPath(const QString& path)
+{
+    m_s.setValue(QLatin1String(kClangFormat), path);
 }
 
 QString Settings::lastProject() const
