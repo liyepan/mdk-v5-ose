@@ -551,7 +551,7 @@ QMenuBar::item { background: transparent; padding: 4px 8px 4px 6px; border-radiu
 QMenuBar::item:selected { background: #eef2f7; }
 QMenuBar::item:pressed { background: #e2e8f0; }
 
-QMenu { background: #ffffff; border: 1px solid #cfd6df; padding: 5px; }
+QMenu { background: #ffffff; border: 1px solid #cfd6df; padding: 2px; }
 QMenu::item { padding: 6px 28px 6px 22px; border-radius: 5px; }
 QMenu::item:selected { background: #eaf1fd; color: #0b57d0; }
 QMenu::item:disabled { color: #98a0ab; }
@@ -600,8 +600,13 @@ QHeaderView::section { background: #f2f5f9; color: #4b5563; padding: 5px 6px;
 QLineEdit, QComboBox, QSpinBox { background: #ffffff; border: 1px solid #cfd6df;
                                  border-radius: 6px; padding: 4px 8px; }
 QLineEdit:focus, QComboBox:focus { border-color: #0b57d0; }
-QComboBox::drop-down { border: none; width: 18px; }
-QToolBar QComboBox { padding: 0px 4px; margin: 0px; border-radius: 3px; }
+/* 下拉箭头：一旦用 QSS 碰了 QComboBox 的子控件，Qt 就不画默认箭头了，
+   所以这里必须自己给一张图（3x 的三角，缩到 9x6 显示） */
+QComboBox::drop-down { border: none; width: 20px; }
+QComboBox::down-arrow { image: url(:/icons/arrow-down.png); width: 9px; height: 6px; }
+/* 工具栏里的下拉框：24px 高，文字略微上提 2px 才是视觉居中
+   （Qt 的 QComboBox 在样式表下会把文字画得偏下） */
+QToolBar QComboBox { padding: 0px 4px 2px 4px; margin: 0px; border-radius: 3px; }
 QToolBar QToolButton { padding: 0px; margin: 0px; }
 QPushButton { background: #ffffff; border: 1px solid #cfd6df; border-radius: 6px; padding: 5px 14px; }
 QPushButton:hover { background: #f2f5f9; }

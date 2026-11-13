@@ -759,10 +759,9 @@ void MainWindow::createToolBars()
         if (action && action == m_symbolComboAnchor) {
             m_symbolCombo = new QComboBox(mainBar);
             m_symbolCombo->setFixedWidth(170);          // 固定长度，不跟着符号名变长
-            m_symbolCombo->setFixedHeight(21);
-            m_symbolCombo->setEditable(true);           // 空的时候也能显示占位文字
-            m_symbolCombo->setInsertPolicy(QComboBox::NoInsert);
-            m_symbolCombo->lineEdit()->setPlaceholderText(Lang::t("Symbols"));
+            m_symbolCombo->setFixedHeight(24);
+            // 不可编辑：可编辑的组合框 Qt 不画下拉箭头（线编辑框盖住了），
+            // 而且我们本来就要显示一个默认符号，不需要占位文字
             m_symbolCombo->setToolTip(Lang::t("Symbols"));
             m_symbolModel = new QStringListModel(this);
             m_symbolCombo->setModel(m_symbolModel);
@@ -790,7 +789,7 @@ void MainWindow::createToolBars()
 
     m_targetCombo = new QComboBox(buildBar);
     m_targetCombo->setFixedWidth(150);
-    m_targetCombo->setFixedHeight(21);
+    m_targetCombo->setFixedHeight(24);
     m_targetCombo->setToolTip(Lang::t("Target"));
     connect(m_targetCombo, QOverload<int>::of(&QComboBox::activated), this,
             &MainWindow::onTargetChanged);
@@ -864,8 +863,12 @@ void MainWindow::dumpToolBarLayout()
         // 工具栏里的 QComboBox 不是 action，单独打
         for (QComboBox* combo : bar->findChildren<QComboBox*>()) {
             const QPoint abs = combo->mapTo(this, QPoint(0, 0));
-            std::fprintf(stderr, "[layout]   %-22s x=%4d w=%3d (combo)\n",
-                         qPrintable(combo->objectName()), abs.x(), combo->width());
+            std::fprintf(stderr,
+                         "[layout]   %-22s x=%4d y=%3d w=%3d h=%3d (combo) enabled=%d count=%d editable=%d text='%s'\n",
+                         qPrintable(combo->objectName()), abs.x(), abs.y(),
+                         combo->width(), combo->height(), combo->isEnabled() ? 1 : 0,
+                         combo->count(), combo->isEditable() ? 1 : 0,
+                         qPrintable(combo->currentText()));
         }
     }
 }
@@ -1612,8 +1615,9 @@ void MainWindow::populateSymbolCombo()
         return;
 
     if (!m_project.isValid()) {
-        m_symbolModel->setStringList(QStringList());
-        m_symbolCombo->setCurrentIndex(-1);
+        m_symbolModel->setStringList(QStringList{ Lang::t("(no project)") });
+        m_symbolCombo->setCurrentIndex(0);
+        m_symbolCombo->setToolTip(Lang::t("Symbols"));
         return;
     }
 
@@ -1622,7 +1626,8 @@ void MainWindow::populateSymbolCombo()
 
     // 几万个符号用 addItems 一个个插会很慢，直接换掉模型是一次性的
     m_symbolModel->setStringList(names);
-    m_symbolCombo->setCurrentIndex(-1);
+    // 默认显示第一个符号，而不是空白
+    m_symbolCombo->setCurrentIndex(names.isEmpty() ? -1 : 0);
     m_symbolCombo->setToolTip(QStringLiteral("%1 symbols").arg(names.size()));
 }
 
