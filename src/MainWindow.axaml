@@ -53,22 +53,43 @@
       </Menu>
 
       <Border DockPanel.Dock="Top" Classes="toolbar">
-        <StackPanel Orientation="Horizontal" Spacing="2">
-          <Button Classes="tool" Content="新建" Click="OnNewFileClick" />
-          <Button Classes="tool" Content="打开" Click="OnOpenProjectClick" />
-          <Button Classes="tool" Content="保存" Click="OnSaveClick" />
+        <StackPanel Orientation="Horizontal" Spacing="1">
+          <Button Classes="tool" Click="OnNewFileClick" ToolTip.Tip="新建文件">
+            <Path Data="{StaticResource Icon.file-plus}" />
+          </Button>
+          <Button Classes="tool" Click="OnOpenProjectClick" ToolTip.Tip="打开工程">
+            <Path Data="{StaticResource Icon.folder-open}" />
+          </Button>
+          <Button Classes="tool" Click="OnSaveClick" ToolTip.Tip="保存">
+            <Path Data="{StaticResource Icon.save}" />
+          </Button>
           <Border Classes="sep" />
-          <Button x:Name="BuildButton" Classes="tool accent" Content="编译" Click="OnBuildClick" />
-          <Button x:Name="RebuildButton" Classes="tool" Content="重新编译" Click="OnRebuildClick" />
-          <Button x:Name="CleanButton" Classes="tool" Content="清理" Click="OnCleanClick" />
-          <Button x:Name="StopButton" Classes="tool" Content="停止" Click="OnStopClick" IsEnabled="False" />
+          <Button x:Name="BuildButton" Classes="tool accent" Click="OnBuildClick" ToolTip.Tip="编译 (F7)">
+            <Path Data="{StaticResource Icon.hammer}" />
+          </Button>
+          <Button x:Name="RebuildButton" Classes="tool" Click="OnRebuildClick" ToolTip.Tip="重新编译">
+            <Path Data="{StaticResource Icon.refresh-cw}" />
+          </Button>
+          <Button x:Name="CleanButton" Classes="tool" Click="OnCleanClick" ToolTip.Tip="清理">
+            <Path Data="{StaticResource Icon.trash-2}" />
+          </Button>
+          <Button x:Name="StopButton" Classes="tool" Click="OnStopClick" IsEnabled="False" ToolTip.Tip="停止编译">
+            <Path Data="{StaticResource Icon.square}" />
+          </Button>
           <Border Classes="sep" />
-          <Button Classes="tool" Content="下载" IsEnabled="False" />
+          <Button Classes="tool" IsEnabled="False" ToolTip.Tip="下载到 Flash（未实现）">
+            <Path Data="{StaticResource Icon.download}" />
+          </Button>
+          <Button Classes="tool" Click="OnConfigureToolchainClick" ToolTip.Tip="配置编译器">
+            <Path Data="{StaticResource Icon.settings}" />
+          </Button>
           <Border Classes="sep" />
-          <TextBlock Text="Target:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="#5B6270" />
-          <ComboBox x:Name="TargetCombo" Width="120" Height="22" SelectionChanged="OnTargetComboChanged" />
-          <TextBlock Text="符号:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="#5B6270" />
-          <ComboBox x:Name="SymbolCombo" Width="170" Height="22" IsEditable="True" />
+          <Path Data="{StaticResource Icon.crosshair}" Stroke="#8A93A0" StrokeThickness="1.7"
+                Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" Margin="6,0,4,0" />
+          <ComboBox x:Name="TargetCombo" Width="120" Height="24" SelectionChanged="OnTargetComboChanged" />
+          <Path Data="{StaticResource Icon.search}" Stroke="#8A93A0" StrokeThickness="1.7"
+                Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" Margin="10,0,4,0" />
+          <ComboBox x:Name="SymbolCombo" Width="180" Height="24" IsEditable="True" />
         </StackPanel>
       </Border>
 

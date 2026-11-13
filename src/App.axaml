@@ -3,6 +3,14 @@
              x:Class="UvisionOse.App"
              RequestedThemeVariant="Light">
 
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://uvision5-ose/Assets/Icons.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
   <Application.Styles>
     <FluentTheme />
     <!-- AvaloniaEdit 自己的控件模板，不加的话编辑器是空白的 -->

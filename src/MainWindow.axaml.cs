@@ -16,6 +16,7 @@ using Avalonia.Threading;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
+using Avalonia.Media.Immutable;
 using UvisionOse.Core;
 
 namespace UvisionOse;
@@ -245,7 +246,7 @@ public partial class MainWindow : Window
 
         var root = new TreeViewItem
         {
-            Header = $"{_project.BaseName} ({target.Name})",
+            Header = MakeNodeHeader(IconKey("Icon.crosshair"), $"{_project.BaseName} ({target.Name})", "#1F2328"),
             IsExpanded = true
         };
 
@@ -253,15 +254,61 @@ public partial class MainWindow : Window
         {
             var gItem = new TreeViewItem
             {
-                Header = $"{group.Name} ({group.Files.Count})",
+                Header = MakeNodeHeader(IconKey("Icon.folder"), $"{group.Name} ({group.Files.Count})", "#3A4048"),
                 IsExpanded = true
             };
             foreach (var file in group.Files)
-                gItem.Items.Add(new TreeViewItem { Header = file.Name, Tag = file });
+            {
+                var (icon, color) = file.Kind switch
+                {
+                    FileKind.CSource or FileKind.CppSource => ("Icon.file-code", "#1E63C6"),
+                    FileKind.Assembly => ("Icon.file-terminal", "#8A5A00"),
+                    _ => ("Icon.file-code", "#5B6270")
+                };
+                gItem.Items.Add(new TreeViewItem
+                {
+                    Header = MakeNodeHeader(IconKey(icon), file.Name, color),
+                    Tag = file
+                });
+            }
             root.Items.Add(gItem);
         }
 
         ProjectTree.Items.Add(root);
+    }
+
+    private static Geometry? IconKey(string key) =>
+        Application.Current?.FindResource(key) as Geometry;
+
+    private static Control MakeNodeHeader(Geometry? icon, string text, string colorHex)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            Spacing = 6
+        };
+        if (icon is not null)
+        {
+            panel.Children.Add(new Avalonia.Controls.Shapes.Path
+            {
+                Data = icon,
+                Stroke = new SolidColorBrush(Color.Parse(colorHex)),
+                StrokeThickness = 1.7,
+                StrokeLineCap = PenLineCap.Round,
+                StrokeJoin = PenLineJoin.Round,
+                Width = 14,
+                Height = 14,
+                Stretch = Stretch.Uniform,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+            });
+        }
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(Color.Parse("#24282E"))
+        });
+        return panel;
     }
 
     private void OnTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
