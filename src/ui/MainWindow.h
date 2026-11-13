@@ -3,6 +3,7 @@
 #include <QMainWindow>
 
 #include "core/BuildEngine.h"
+#include "core/Flasher.h"
 #include "core/Lang.h"
 #include "core/SymbolIndex.h"
 #include "core/Toolchain.h"
@@ -63,6 +64,7 @@ private slots:
     void onClean();
     void onStopBuild();
     void onDownload();
+    void onFlashSettings();
     void onDebugPlaceholder();
 
     void onTargetChanged(int index);
@@ -161,6 +163,7 @@ private:
 
     Toolchain   m_toolchain;
     BuildEngine* m_engine = nullptr;
+    Flasher*     m_flasher = nullptr;   // 烧写用的外部进程封装
     SymbolIndex m_symbols;
     QHash<QString, QColor> m_fileTabColors;
     int         m_tabColorCursor = 0;

@@ -94,6 +94,22 @@
 - **文件编码**：默认 UTF-8。编辑器里右键 -> Encoding 可切 UTF-8 / GBK / GB18030 / Big5 / 系统默认，
   切完自动按新编码重新载入；工程树里右键文件也能「按指定编码打开」；状态栏显示当前文件编码
 
+## 烧写（Download to Flash）
+
+工具栏的下载按钮（或 Flash 菜单）把编好的文件烧进芯片。后端可插拔，
+配置在 **Tools -> Flash Download Settings**，全存在自己的 INI 里，**不写 .uvprojx**：
+
+| 后端 | 做法 |
+|---|---|
+| **J-Link** | 调 `JLink.exe -device <Device> -if SWD -speed 4000 -ExitOnError 1 -CommandFile <脚本>`，脚本是 `loadfile xxx.hex` → `r` → `g` → `exit`；裸 .bin 用 `loadbin` + `verifybin` |
+| **OpenOCD** | `openocd -f <interface.cfg> -f <target.cfg> -c "program ... verify reset exit"` |
+| **pyOCD** | `pyocd flash -t <device> xxx` |
+| **自定义命令** | 自己写命令行，支持 `{file}` `{device}` `{interface}` `{speed}` `{addr}` |
+
+- 优先烧 `.hex`，没有就烧 `.axf`；都没有会提示先 Build
+- 工具没配好会先弹设置对话框
+- 日志逐行进 Build Output，失败弹错误框，3 分钟超时自动中止
+
 ## 写回 .uvprojx 时保证不破坏 Keil 的构建
 
 改 Target 选项（Options for Target）和工程管理器都会写回 `.uvprojx`，
@@ -185,9 +201,9 @@ Project Targets:      Groups:              Files:
 
 ## 未实现
 
-- 烧写（OpenOCD / pyOCD）与调试会话（GDB + DAP），菜单里是占位并会明确提示
+- 调试会话（GDB + DAP）：Debug 菜单里是占位并会明确提示
 - Pack Manager（按需求不做）
-- 工程树里增删文件、文件级选项对话框
+- 文件级 / 组级编译选项的编辑（现在只能保留 Keil 里配好的，不能在应用里改）
 
 ## 构建
 

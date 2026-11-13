@@ -54,6 +54,21 @@ const QHash<QString, QString>& dictionary()
         add("Remove the selected group(s) and all files inside them?",
             QStringLiteral("删除选中的分组及其中所有文件？"));
         add("Open a project first.", QStringLiteral("请先打开一个工程。"));
+        add("Flash Download Settings", QStringLiteral("烧写设置"));
+        add("Flash Download Settings...", QStringLiteral("烧写设置..."));
+        add("Backend:", QStringLiteral("烧写后端:"));
+        add("Tool path:", QStringLiteral("工具路径:"));
+        add("Interface:", QStringLiteral("接口:"));
+        add("Speed:", QStringLiteral("速度:"));
+        add("Verify after download", QStringLiteral("烧写后校验"));
+        add("Reset and run after download", QStringLiteral("烧写后复位运行"));
+        add("Custom command", QStringLiteral("自定义命令"));
+        add("Custom command:", QStringLiteral("自定义命令:"));
+        add("Select flash tool", QStringLiteral("选择烧写工具"));
+        add("Download", QStringLiteral("烧写到 Flash"));
+        add("Downloading...", QStringLiteral("正在烧写..."));
+        add("Download finished", QStringLiteral("烧写完成"));
+        add("Download cancelled", QStringLiteral("烧写已取消"));
         add("Insert Breakpoint", QStringLiteral("插入断点"));
         add("Delete Breakpoint", QStringLiteral("删除断点"));
         add("Delete All Breakpoints (Target)", QStringLiteral("清空当前 Target 的断点"));

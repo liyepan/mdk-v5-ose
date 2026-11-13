@@ -65,6 +65,10 @@ signals:
     // 链接成功后可用的 .map 文件
     void mapFileReady(const QString& path);
 
+public:
+    // 编好的 .axf 路径（烧写要用）
+    QString axfPath() const;
+
 private:
     enum class Mode { Build, Translate, Clean };
 
@@ -116,7 +120,6 @@ private:
     const Target* currentTarget() const;
     QString projectDir() const;
     QString outputDir() const;
-    QString axfPath() const;
     QString mapPath() const;
     QString libPath() const;
     QString cpuName() const;

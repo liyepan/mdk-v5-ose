@@ -653,6 +653,8 @@ void MainWindow::createMenus()
     QMenu* toolsMenu = menuBar()->addMenu(Lang::t("&Tools"));
     toolsMenu->addAction(Lang::t("Configure Toolchain..."),
                          this, &MainWindow::onConfigureToolchain);
+    toolsMenu->addAction(Lang::t("Flash Download Settings..."),
+                         this, &MainWindow::onFlashSettings);
 
     // 并行编译任务数：Auto = 本机逻辑处理器数
     QMenu* jobsMenu = toolsMenu->addMenu(Lang::t("Parallel Build"));
@@ -2323,12 +2325,90 @@ void MainWindow::onStopBuild()
     m_engine->cancel();
 }
 
+// 烧写：找编好的 .hex / .axf，交给 Flasher 调外部工具
 void MainWindow::onDownload()
 {
-    QMessageBox::information(
-        this, Lang::t("Download"),
-        QStringLiteral("烧写功能将在下一步接入（OpenOCD/pyOCD + CMSIS-DAP）。\n"
-                       "当前可以先生成 HEX/BIN。"));
+    if (!m_project.isValid()) {
+        QMessageBox::information(this, Lang::t("Download"), Lang::t("Open a project first."));
+        return;
+    }
+    if (m_flasher && m_flasher->isRunning())
+        return;
+
+    // 优先烧 .hex（工程勾了"生成 HEX"才有），否则直接烧 .axf
+    QString axf = m_engine->axfPath();
+    QString hex = axf;
+    if (hex.endsWith(QStringLiteral(".axf")))
+        hex.chop(4);
+    hex += QStringLiteral(".hex");
+
+    QString artifact = QFileInfo::exists(hex) ? hex : axf;
+    if (!QFileInfo::exists(artifact)) {
+        QMessageBox::information(
+            this, Lang::t("Download"),
+            QStringLiteral("还没编译出可烧写的文件：\n%1\n\n先 Build 一次。").arg(artifact));
+        return;
+    }
+
+    const Target* target = m_project.target(m_activeTarget);
+    if (!target)
+        return;
+
+    Settings& settings = Settings::instance();
+    FlashRequest request;
+    request.filePath = artifact;
+    request.device = target->device;
+    request.workDir = m_project.directory();
+    request.config.backend = settings.flashBackend();
+    request.config.toolPath = settings.flashToolPath();
+    request.config.interface = settings.flashInterface();
+    request.config.speed = settings.flashSpeed();
+    request.config.verify = settings.flashVerify();
+    request.config.resetAfter = settings.flashResetAfter();
+    request.config.openocdInterface = settings.flashOpenOcdInterface();
+    request.config.openocdTarget = settings.flashOpenOcdTarget();
+    request.config.customCommand = settings.flashCustomCommand();
+
+    // 工具没配好就先把设置对话框打开
+    const bool needTool = (request.config.backend != QLatin1String("custom"));
+    if (needTool && request.config.toolPath.isEmpty()
+        && Flasher::detectTool(request.config.backend).isEmpty()) {
+        if (!FlashDialog::configure(this))
+            return;
+        // 重新读一遍配置
+        request.config.toolPath = settings.flashToolPath();
+        request.config.backend = settings.flashBackend();
+    }
+
+    if (!m_flasher) {
+        m_flasher = new Flasher(this);
+        connect(m_flasher, &Flasher::output, this, [this](const QString& line) {
+            m_buildOutput->appendLine(line);
+        });
+        connect(m_flasher, &Flasher::finished, this, [this](bool ok, const QString& error) {
+            setBusy(false);
+            if (ok) {
+                m_statusMessage->setText(Lang::t("Download finished"));
+                m_buildOutput->appendLine(QStringLiteral("--- Download finished ---"));
+            } else {
+                m_statusMessage->setText(QStringLiteral("烧写失败: %1").arg(error));
+                m_buildOutput->appendLine(QStringLiteral("--- Download failed: %1 ---").arg(error));
+                revealBuildOutput();
+                QMessageBox::warning(this, Lang::t("Download"), error);
+            }
+        });
+    }
+
+    setBusy(true);
+    revealBuildOutput();
+    m_buildOutput->appendLine(QStringLiteral("=== Download: %1 ===").arg(artifact));
+    m_statusMessage->setText(Lang::t("Downloading..."));
+    m_flasher->start(request);
+}
+
+void MainWindow::onFlashSettings()
+{
+    FlashDialog::configure(this);
 }
 
 void MainWindow::onDebugPlaceholder()

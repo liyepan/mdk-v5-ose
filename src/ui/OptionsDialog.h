@@ -9,6 +9,7 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
+class QSpinBox;
 
 // Project -> Options for Target
 class OptionsDialog : public QDialog
@@ -57,6 +58,35 @@ private:
     QCheckBox* m_microlib = nullptr;
     QCheckBox* m_noStdLib = nullptr;
     QLineEdit* m_linkerMisc = nullptr;
+};
+
+// Tools -> Flash Download Settings：选烧写后端、工具路径、接口和速度
+class FlashDialog : public QDialog
+{
+    Q_OBJECT
+
+public:
+    explicit FlashDialog(QWidget* parent = nullptr);
+
+    static bool configure(QWidget* parent);
+
+private:
+    void refreshStatus();
+    void browseTool();
+
+    QComboBox* m_backend = nullptr;
+    QLineEdit* m_toolPath = nullptr;
+    QComboBox* m_interface = nullptr;
+    QSpinBox*  m_speed = nullptr;
+    QCheckBox* m_verify = nullptr;
+    QCheckBox* m_resetAfter = nullptr;
+    QLineEdit* m_ocdInterface = nullptr;
+    QLineEdit* m_ocdTarget = nullptr;
+    QLineEdit* m_custom = nullptr;
+    QWidget*   m_ocdIfaceLabel = nullptr;
+    QWidget*   m_ocdTargetLabel = nullptr;
+    QWidget*   m_customLabel = nullptr;
+    QLabel*    m_status = nullptr;
 };
 
 // Tools -> Configure Toolchain（手工指定 armcc.exe 所在目录）

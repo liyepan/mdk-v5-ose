@@ -22,6 +22,26 @@ public:
     QString toolchainFamily() const;
     void setToolchainFamily(const QString& family);
 
+    // ---- 烧写（不改 .uvprojx，全存在自己的 INI 里） ----
+    QString flashBackend() const;
+    void setFlashBackend(const QString& backend);
+    QString flashToolPath() const;
+    void setFlashToolPath(const QString& path);
+    QString flashInterface() const;
+    void setFlashInterface(const QString& iface);
+    int     flashSpeed() const;
+    void    setFlashSpeed(int khz);
+    bool    flashVerify() const;
+    void    setFlashVerify(bool on);
+    bool    flashResetAfter() const;
+    void    setFlashResetAfter(bool on);
+    QString flashOpenOcdInterface() const;
+    void    setFlashOpenOcdInterface(const QString& cfg);
+    QString flashOpenOcdTarget() const;
+    void    setFlashOpenOcdTarget(const QString& cfg);
+    QString flashCustomCommand() const;
+    void    setFlashCustomCommand(const QString& command);
+
     // ---- 构建 ----
     // 并行编译任务数，默认取本机逻辑处理器数（核数 x 超线程）；1 表示串行
     int  buildJobs() const;

@@ -15,6 +15,15 @@ const char* kLanguage      = "ui/language";
 const char* kFormatOnSave  = "editor/formatOnSave";
 const char* kClangFormat   = "editor/clangFormatPath";
 const char* kFormatStyle   = "editor/formatStyle";
+const char* kFlashBackend  = "flash/backend";
+const char* kFlashTool     = "flash/toolPath";
+const char* kFlashIface    = "flash/interface";
+const char* kFlashSpeed    = "flash/speed";
+const char* kFlashVerify   = "flash/verify";
+const char* kFlashReset    = "flash/resetAfter";
+const char* kFlashOcdIface = "flash/openocdInterface";
+const char* kFlashOcdTarget= "flash/openocdTarget";
+const char* kFlashCustom   = "flash/customCommand";
 const char* kGeometry      = "window/geometry";
 const char* kState         = "window/state";
 }
@@ -96,6 +105,96 @@ QString Settings::clangFormatPath() const
 void Settings::setClangFormatPath(const QString& path)
 {
     m_s.setValue(QLatin1String(kClangFormat), path);
+}
+
+QString Settings::flashBackend() const
+{
+    return m_s.value(QLatin1String(kFlashBackend), QStringLiteral("jlink")).toString();
+}
+
+void Settings::setFlashBackend(const QString& backend)
+{
+    m_s.setValue(QLatin1String(kFlashBackend), backend);
+}
+
+QString Settings::flashToolPath() const
+{
+    return m_s.value(QLatin1String(kFlashTool)).toString();
+}
+
+void Settings::setFlashToolPath(const QString& path)
+{
+    m_s.setValue(QLatin1String(kFlashTool), path);
+}
+
+QString Settings::flashInterface() const
+{
+    return m_s.value(QLatin1String(kFlashIface), QStringLiteral("SWD")).toString();
+}
+
+void Settings::setFlashInterface(const QString& iface)
+{
+    m_s.setValue(QLatin1String(kFlashIface), iface);
+}
+
+int Settings::flashSpeed() const
+{
+    return m_s.value(QLatin1String(kFlashSpeed), 4000).toInt();
+}
+
+void Settings::setFlashSpeed(int khz)
+{
+    m_s.setValue(QLatin1String(kFlashSpeed), khz);
+}
+
+bool Settings::flashVerify() const
+{
+    return m_s.value(QLatin1String(kFlashVerify), true).toBool();
+}
+
+void Settings::setFlashVerify(bool on)
+{
+    m_s.setValue(QLatin1String(kFlashVerify), on);
+}
+
+bool Settings::flashResetAfter() const
+{
+    return m_s.value(QLatin1String(kFlashReset), true).toBool();
+}
+
+void Settings::setFlashResetAfter(bool on)
+{
+    m_s.setValue(QLatin1String(kFlashReset), on);
+}
+
+QString Settings::flashOpenOcdInterface() const
+{
+    return m_s.value(QLatin1String(kFlashOcdIface), QStringLiteral("interface/cmsis-dap.cfg")).toString();
+}
+
+void Settings::setFlashOpenOcdInterface(const QString& cfg)
+{
+    m_s.setValue(QLatin1String(kFlashOcdIface), cfg);
+}
+
+QString Settings::flashOpenOcdTarget() const
+{
+    return m_s.value(QLatin1String(kFlashOcdTarget)).toString();
+}
+
+void Settings::setFlashOpenOcdTarget(const QString& cfg)
+{
+    m_s.setValue(QLatin1String(kFlashOcdTarget), cfg);
+}
+
+QString Settings::flashCustomCommand() const
+{
+    return m_s.value(QLatin1String(kFlashCustom)).toString();
+}
+
+void Settings::setFlashCustomCommand(const QString& command)
+{
+    m_s.setValue(QLatin1String(kFlashCustom), command);
 }
 
 QString Settings::formatStyle() const

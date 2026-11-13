@@ -1,4 +1,5 @@
 #include "ui/OptionsDialog.h"
+#include "core/Flasher.h"
 #include "core/Formatter.h"
 #include "core/Lang.h"
 #include "core/Settings.h"
@@ -16,6 +17,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -254,6 +256,170 @@ void OptionsDialog::saveToTarget()
     m_target.useMicrolib = m_microlib->isChecked();
     m_target.noStartLib = m_noStdLib->isChecked();
     m_target.linkerMisc = m_linkerMisc->text();
+}
+
+// ---------------------------------------------------------------- Flash
+FlashDialog::FlashDialog(QWidget* parent)
+    : QDialog(parent)
+{
+    setWindowTitle(Lang::t("Flash Download Settings"));
+    setModal(true);
+
+    auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(14, 14, 14, 12);
+    layout->setSpacing(8);
+
+    auto* form = new QFormLayout;
+    form->setHorizontalSpacing(12);
+    form->setVerticalSpacing(8);
+
+    Settings& settings = Settings::instance();
+
+    m_backend = new QComboBox;
+    m_backend->addItem(QStringLiteral("J-Link (JLink.exe)"), QStringLiteral("jlink"));
+    m_backend->addItem(QStringLiteral("OpenOCD"), QStringLiteral("openocd"));
+    m_backend->addItem(QStringLiteral("pyOCD"), QStringLiteral("pyocd"));
+    m_backend->addItem(Lang::t("Custom command"), QStringLiteral("custom"));
+    for (int i = 0; i < m_backend->count(); ++i) {
+        if (m_backend->itemData(i).toString() == settings.flashBackend()) {
+            m_backend->setCurrentIndex(i);
+            break;
+        }
+    }
+    form->addRow(Lang::t("Backend:"), m_backend);
+
+    auto* toolRow = new QWidget;
+    auto* toolLayout = new QHBoxLayout(toolRow);
+    toolLayout->setContentsMargins(0, 0, 0, 0);
+    m_toolPath = new QLineEdit(settings.flashToolPath());
+    m_toolPath->setPlaceholderText(QStringLiteral("留空 = 自动探测"));
+    auto* browse = new QPushButton(Lang::t("Browse..."));
+    toolLayout->addWidget(m_toolPath, 1);
+    toolLayout->addWidget(browse);
+    form->addRow(Lang::t("Tool path:"), toolRow);
+
+    m_interface = new QComboBox;
+    m_interface->addItem(QStringLiteral("SWD"));
+    m_interface->addItem(QStringLiteral("JTAG"));
+    m_interface->setCurrentText(settings.flashInterface());
+    form->addRow(Lang::t("Interface:"), m_interface);
+
+    m_speed = new QSpinBox;
+    m_speed->setRange(100, 50000);
+    m_speed->setSingleStep(1000);
+    m_speed->setSuffix(QStringLiteral(" kHz"));
+    m_speed->setValue(settings.flashSpeed());
+    form->addRow(Lang::t("Speed:"), m_speed);
+
+    m_verify = new QCheckBox(Lang::t("Verify after download"));
+    m_verify->setChecked(settings.flashVerify());
+    form->addRow(QString(), m_verify);
+
+    m_resetAfter = new QCheckBox(Lang::t("Reset and run after download"));
+    m_resetAfter->setChecked(settings.flashResetAfter());
+    form->addRow(QString(), m_resetAfter);
+
+    m_ocdInterface = new QLineEdit(settings.flashOpenOcdInterface());
+    m_ocdTarget = new QLineEdit(settings.flashOpenOcdTarget());
+    m_ocdTarget->setPlaceholderText(QStringLiteral("target/gd32f10x.cfg"));
+    form->addRow(QStringLiteral("OpenOCD -f:"), m_ocdInterface);
+    form->addRow(QStringLiteral("OpenOCD target:"), m_ocdTarget);
+    m_ocdIfaceLabel = form->labelForField(m_ocdInterface);
+    m_ocdTargetLabel = form->labelForField(m_ocdTarget);
+
+    m_custom = new QLineEdit(settings.flashCustomCommand());
+    m_custom->setPlaceholderText(
+        QStringLiteral("openocd -f ... -c \"program {file} verify reset exit\""));
+    form->addRow(Lang::t("Custom command:"), m_custom);
+    m_customLabel = form->labelForField(m_custom);
+
+    layout->addLayout(form);
+
+    m_status = new QLabel;
+    m_status->setWordWrap(true);
+    layout->addWidget(m_status);
+
+    auto* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    layout->addWidget(box);
+
+    connect(box, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(box, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(browse, &QPushButton::clicked, this, &FlashDialog::browseTool);
+    connect(m_backend, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { refreshStatus(); });
+    connect(m_toolPath, &QLineEdit::textChanged, this, [this](const QString&) { refreshStatus(); });
+
+    refreshStatus();
+    resize(560, 380);
+}
+
+void FlashDialog::browseTool()
+{
+    const QString backend = m_backend->currentData().toString();
+    QString filter = QStringLiteral("All Files (*)");
+    if (backend == QLatin1String("jlink"))
+        filter = QStringLiteral("J-Link (*.exe JLink JLinkExe);;All Files (*)");
+    const QString file = QFileDialog::getOpenFileName(
+        this, Lang::t("Select flash tool"), m_toolPath->text(), filter);
+    if (!file.isEmpty())
+        m_toolPath->setText(QDir::toNativeSeparators(file));
+}
+
+void FlashDialog::refreshStatus()
+{
+    const QString backend = m_backend->currentData().toString();
+    const bool custom = (backend == QLatin1String("custom"));
+    const bool openocd = (backend == QLatin1String("openocd"));
+
+    // 和后端无关的行直接藏起来，别堆在那儿碍事
+    m_ocdInterface->setVisible(openocd);
+    m_ocdTarget->setVisible(openocd);
+    m_custom->setVisible(custom);
+    if (m_ocdIfaceLabel)
+        m_ocdIfaceLabel->setVisible(openocd);
+    if (m_ocdTargetLabel)
+        m_ocdTargetLabel->setVisible(openocd);
+    if (m_customLabel)
+        m_customLabel->setVisible(custom);
+    m_interface->setEnabled(!custom && !openocd && backend != QLatin1String("pyocd"));
+    m_speed->setEnabled(!custom && !openocd);
+
+    if (custom) {
+        m_status->setText(QStringLiteral("占位符：{file} {device} {interface} {speed} {addr}"));
+        m_status->setStyleSheet(QStringLiteral("color: #5b6270;"));
+        return;
+    }
+
+    const QString typed = m_toolPath->text().trimmed();
+    const QString found = typed.isEmpty() ? Flasher::detectTool(backend) : typed;
+
+    if (found.isEmpty()) {
+        m_status->setText(QStringLiteral("没找到烧写工具，请指定路径"));
+        m_status->setStyleSheet(QStringLiteral("color: #b01a1a;"));
+    } else {
+        m_status->setText(QStringLiteral("将使用: %1").arg(QDir::toNativeSeparators(found)));
+        m_status->setStyleSheet(QStringLiteral("color: #1a7f37;"));
+    }
+}
+
+bool FlashDialog::configure(QWidget* parent)
+{
+    FlashDialog dialog(parent);
+    if (dialog.exec() != QDialog::Accepted)
+        return false;
+
+    Settings& settings = Settings::instance();
+    settings.setFlashBackend(dialog.m_backend->currentData().toString());
+    settings.setFlashToolPath(dialog.m_toolPath->text().trimmed());
+    settings.setFlashInterface(dialog.m_interface->currentText());
+    settings.setFlashSpeed(dialog.m_speed->value());
+    settings.setFlashVerify(dialog.m_verify->isChecked());
+    settings.setFlashResetAfter(dialog.m_resetAfter->isChecked());
+    settings.setFlashOpenOcdInterface(dialog.m_ocdInterface->text().trimmed());
+    settings.setFlashOpenOcdTarget(dialog.m_ocdTarget->text().trimmed());
+    settings.setFlashCustomCommand(dialog.m_custom->text().trimmed());
+    settings.sync();
+    return true;
 }
 
 // ---------------------------------------------------------------- Toolchain

@@ -20,6 +20,7 @@ SOURCES += \
     src/core/Toolchain.cpp \
     src/core/Diagnostic.cpp \
     src/core/BuildEngine.cpp \
+    src/core/Flasher.cpp \
     src/core/Formatter.cpp \
     src/core/Lang.cpp \
     src/core/SymbolIndex.cpp \
@@ -41,6 +42,7 @@ HEADERS += \
     src/core/Toolchain.h \
     src/core/Diagnostic.h \
     src/core/BuildEngine.h \
+    src/core/Flasher.h \
     src/core/Formatter.h \
     src/core/Lang.h \
     src/core/SymbolIndex.h \
