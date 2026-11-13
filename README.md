@@ -207,7 +207,31 @@ CMake 配置阶段会直接报找不到 GL/gl.h。没有的话用 qmake 那条�
 ### 在 Gitea 上
 
 Gitea 也会读 `.github/workflows`，每个 job 都带
-`if: github.server_url == 'https://github.com'` 守卫，在 Gitea 上只会显示 skipped，不占 runner。
+`if: github.server_url == 'https://github.com'` 守卫，在 Gitea 上只会显示 skipped，不占 runner
+（唯一例外是 `gitea-tag`，见下）。
+
+### Release 为什么会被“删掉”
+
+Gitea 的 push mirror 是 `--mirror` 强推，隐含 `--prune`：**GitHub 上多出来、Gitea 没有的
+ref 会被删掉**。Release 挂在 tag 上，tag 被 prune 掉，Release 就跟着没 —— 所以现象是
+
+> 本地提交、push 到 Gitea，镜像同步之后 GitHub 上的 Release 消失
+
+工作流里没有任何删除 Release 的步骤，问题出在镜像同步。解决办法只有一个方向：
+**让 tag 在 Gitea 这边也存在**。
+
+`gitea-tag` job 就是干这个的：跑在 Gitea 上，读 `mdk-v5-ose.pro` 的 `VERSION`，
+发现 `v<版本>` 不在 Gitea 就补推一个 tag。tag 一进 Gitea，下一次镜像同步就会带到 GitHub，
+Release 也就跟着回来了（GitHub 侧按 tag 名认领，tag 回来 Release 就回来）。
+
+要注意的：
+
+- Gitea 的 runner 要有 linux 的 `ubuntu-latest` 标签，否则这个 job 会一直排队
+- 手动补也行：`git push origin v0.2.0`
+- 完全没配 Gitea runner 的话，就每次发版手动 push 一下 tag
+
+`release` job 里那段“把 tag 同步回 Gitea”是从 GitHub 侧兜底的，需要给 GitHub 仓库配
+`GITEA_TOKEN` secret，没配就只打一行提示。两边只要有一边把 tag 补上，Release 就不会丢。
 
 ## 目录
 
