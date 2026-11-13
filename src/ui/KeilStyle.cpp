@@ -172,6 +172,126 @@ void drawBug(QPainter& p, const QRectF& r)
     p.drawLine(QPointF(r.right() - 4.5, r.top() + 12.0), QPointF(r.right() - 1.5, r.top() + 13.5));
 }
 
+// ------------------------------------------------------------ Keil 风格图标
+// uVision 那套图标是 16x16 的像素画：白纸、蓝软盘、黄文件夹、青色小旗。
+// 下面这些函数全部按整像素矩形画（不开抗锯齿），放大后就是原汁原味的方块感。
+
+namespace {
+
+// 常用色，照 MDK 工具条取的
+const QColor kOutline(0x40, 0x40, 0x40);
+const QColor kPaperEdge(0x8c, 0x8c, 0x8c);
+const QColor kPaperShade(0xe8, 0xe8, 0xe8);
+const QColor kDiskBlue(0x33, 0x4d, 0xa0);
+const QColor kDiskDark(0x24, 0x37, 0x74);
+const QColor kDiskLight(0x6c, 0x86, 0xd8);
+const QColor kClipBrown(0xc0, 0x9a, 0x60);
+const QColor kClipDark(0x8a, 0x6a, 0x38);
+const QColor kFlagTeal(0x2a, 0xb0, 0xb8);
+const QColor kArrowBlue(0x2f, 0x5f, 0xc0);
+const QColor kArrowGray(0xa8, 0xa8, 0xa8);
+
+void px(QPainter& p, int x, int y, int w, int h, const QColor& c)
+{
+    p.fillRect(QRectF(x, y, w, h), c);
+}
+
+// 白纸：右上角切一刀，再补一个折角三角（uVision 的"新建"就是这个样子）
+void paperIcon(QPainter& p, int x, int y, int w, int h, bool folded)
+{
+    const int f = folded ? 4 : 0;
+
+    QPolygon body;
+    body << QPoint(x, y) << QPoint(x + w - f, y)
+         << QPoint(x + w, y + f) << QPoint(x + w, y + h)
+         << QPoint(x, y + h);
+
+    p.setPen(QPen(kPaperEdge, 1));
+    p.setBrush(kPage);
+    p.drawPolygon(body);
+
+    if (folded) {
+        QPolygon fold;
+        fold << QPoint(x + w - f, y) << QPoint(x + w - f, y + f) << QPoint(x + w, y + f);
+        p.setPen(QPen(kPaperEdge, 1));
+        p.setBrush(kPaperShade);
+        p.drawPolygon(fold);
+    }
+}
+
+// 黄色文件夹
+void folderIcon(QPainter& p, int x, int y, int w, int h)
+{
+    px(p, x, y + 2, 5, 2, kFolderEdge);            // 标签
+    px(p, x + 1, y + 3, 4, 1, kFolder);
+    px(p, x, y + 4, w, h - 4, kFolderEdge);
+    px(p, x + 1, y + 5, w - 2, h - 6, kFolder);
+    px(p, x + 1, y + 5, w - 2, 1, kFolder.lighter(115));
+}
+
+// Keil 的编译图标：一张带点边的白纸，上面压一到两个蓝色向下箭头
+void pageWithArrows(QPainter& p, int arrowCount)
+{
+    // 纸
+    px(p, 2, 1, 12, 14, kPaperEdge);
+    px(p, 3, 2, 10, 12, kPage);
+    // 四周的小点，模仿 uVision 那种"待编译"的观感
+    for (int x = 3; x < 13; x += 2) {
+        px(p, x, 1, 1, 1, kPaperShade.darker(120));
+        px(p, x, 14, 1, 1, kPaperShade.darker(120));
+    }
+    for (int y = 2; y < 14; y += 2) {
+        px(p, 2, y, 1, 1, kPaperShade.darker(120));
+        px(p, 13, y, 1, 1, kPaperShade.darker(120));
+    }
+
+    const QColor c(0x3d, 0x6d, 0xd0);
+    const QColor edge(0x1f, 0x3f, 0x8f);
+    auto arrow = [&](int x, int y) {
+        px(p, x + 2, y, 2, 4, c);
+        px(p, x, y + 4, 6, 1, c);
+        px(p, x + 1, y + 5, 4, 1, c);
+        px(p, x + 2, y + 6, 2, 1, c);
+        px(p, x + 1, y + 4, 1, 1, edge);
+    };
+
+    if (arrowCount == 1) {
+        arrow(5, 4);
+    } else {
+        arrow(2, 3);
+        arrow(8, 6);
+    }
+}
+
+// 剪刀
+void scissorsIcon(QPainter& p)
+{
+    p.setRenderHint(QPainter::Antialiasing, false);
+    p.setPen(QPen(QColor(0x70, 0x70, 0x70), 1.2));
+    p.drawLine(QPointF(3.0, 2.5), QPointF(10.0, 10.0));
+    p.drawLine(QPointF(12.5, 2.5), QPointF(5.5, 10.0));
+
+    p.setPen(QPen(QColor(0x60, 0x60, 0x60), 1.2));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QRectF(2.0, 10.0, 4.0, 3.5));
+    p.drawEllipse(QRectF(9.5, 10.0, 4.0, 3.5));
+}
+
+// 蓝色软盘
+void diskIcon(QPainter& p, int x, int y, bool second)
+{
+    px(p, x, y, 12, 12, kOutline);
+    px(p, x + 1, y + 1, 10, 10, kDiskBlue);
+    px(p, x + 3, y + 1, 6, 4, kPage);              // 标签
+    px(p, x + 3, y + 1, 6, 1, kDiskLight);
+    px(p, x + 2, y + 7, 8, 4, kDiskDark);          // 快门
+    px(p, x + 4, y + 8, 4, 2, kDiskLight);
+    if (second)
+        px(p, x + 11, y + 2, 2, 10, kOutline);
+}
+
+} // namespace
+
 // 所有图形都按 16x16 的逻辑坐标画，再整体缩放到目标尺寸，
 // 这样同一份代码既能画 16px 工具条，也能画 32px 窗口图标、96px 的 6x 屏。
 void paintIcon(QPainter& p, const QString& name, int size)
@@ -183,38 +303,28 @@ void paintIcon(QPainter& p, const QString& name, int size)
     const QRectF r(1.5, 1.5, 13.0, 13.0);
 
     if (name == QLatin1String("new")) {
-        drawPage(p, r);
+        // 白纸 + 右上折角（和 uVision 的"新建"一致）
+        paperIcon(p, 3, 1, 10, 14, true);
     } else if (name == QLatin1String("open")) {
-        drawFolderShape(p, r);
+        // 黄文件夹，上面斜插一张白纸
+        folderIcon(p, 1, 4, 13, 11);
+        p.save();
+        p.translate(3.0, 0.0);
+        paperIcon(p, 2, 1, 8, 10, true);
+        p.restore();
     } else if (name == QLatin1String("save")) {
-        p.setPen(QPen(QColor(0x33, 0x33, 0x33), 1));
-        p.setBrush(kBlue);
-        p.drawRect(r);
-        p.setBrush(kPage);
-        p.drawRect(QRectF(r.left() + 2, r.top() + 1, r.width() - 4, 4));
-        p.drawRect(QRectF(r.left() + 2, r.center().y() + 1, r.width() - 4, r.height() * 0.4));
+        diskIcon(p, 2, 2, false);
     } else if (name == QLatin1String("saveall")) {
-        p.setPen(QPen(QColor(0x33, 0x33, 0x33), 1));
-        p.setBrush(QColor(0xd8, 0xd8, 0xd8));
-        p.drawRect(r.adjusted(2, 2, 0, 0));
-        p.setBrush(kBlue);
-        p.drawRect(r.adjusted(0, 0, -2, -2));
-        p.setBrush(kPage);
-        p.drawRect(QRectF(r.left() + 1, r.top() + 1, r.width() - 5, 3));
-    } else if (name == QLatin1String("build") || name == QLatin1String("translate")) {
-        drawHammer(p, r);
+        // 两张叠在一起：后面一张只露个边
+        px(p, 2, 1, 10, 10, kOutline);
+        px(p, 3, 2, 8, 8, kDiskBlue.darker(120));
+        diskIcon(p, 4, 4, false);
+    } else if (name == QLatin1String("build")) {
+        pageWithArrows(p, 2);
+    } else if (name == QLatin1String("translate")) {
+        pageWithArrows(p, 1);
     } else if (name == QLatin1String("rebuild")) {
-        drawHammer(p, r);
-        p.setPen(QPen(kRed, 1.4));
-        p.setBrush(Qt::NoBrush);
-        p.drawArc(QRectF(r.right() - 7, r.top(), 6.5, 6.5), 40 * 16, 260 * 16);
-        QPolygonF tip;
-        tip << QPointF(r.right() - 1.5, r.top() + 1.0)
-            << QPointF(r.right() - 4.0, r.top() + 3.0)
-            << QPointF(r.right() - 0.5, r.top() + 4.5);
-        p.setBrush(kRed);
-        p.setPen(QPen(kRed, 0));
-        p.drawPolygon(tip);
+        pageWithArrows(p, 2);
     } else if (name == QLatin1String("stop")) {
         p.setPen(QPen(kRed.darker(160), 1));
         p.setBrush(kRed);
@@ -309,6 +419,8 @@ void paintIcon(QPainter& p, const QString& name, int size)
         p.setBrush(Qt::NoBrush);
         p.drawEllipse(r.adjusted(1.8, 1.8, -1.8, -1.8));
     } else if (name == QLatin1String("cut")) {
+        scissorsIcon(p);
+    } else if (name == QLatin1String("cut_old")) {
         p.setPen(QPen(kInk, 1.2));
         p.setBrush(Qt::NoBrush);
         p.drawEllipse(QPointF(r.left() + 3.2, r.bottom() - 2.6), 1.8, 1.8);
@@ -329,7 +441,8 @@ void paintIcon(QPainter& p, const QString& name, int size)
         p.drawRect(QRectF(r.left() + 3.5, r.top() + 1.0, 6.5, 3.0));
     } else if (name == QLatin1String("undo") || name == QLatin1String("redo")) {
         const bool redo = (name == QLatin1String("redo"));
-        p.setPen(QPen(kBlue, 1.6));
+        // uVision 的撤销/重做是灰色 U 形箭头，不是蓝色
+        p.setPen(QPen(QColor(0x7c, 0x7c, 0x7c), 1.8));
         p.setBrush(Qt::NoBrush);
         const QRectF arc = redo ? QRectF(r.left() + 1.5, r.top() + 3.5, 10.0, 8.0)
                                 : QRectF(r.right() - 11.5, r.top() + 3.5, 10.0, 8.0);
@@ -344,8 +457,8 @@ void paintIcon(QPainter& p, const QString& name, int size)
                 << QPointF(r.right() - 6.0, r.top() + 6.0)
                 << QPointF(r.right() - 2.5, r.top() + 8.5);
         }
-        p.setBrush(kBlue);
-        p.setPen(QPen(kBlue, 0));
+        p.setBrush(QColor(0x7c, 0x7c, 0x7c));
+        p.setPen(Qt::NoPen);
         p.drawPolygon(tip);
     } else if (name == QLatin1String("back") || name == QLatin1String("forward")) {
         const bool back = (name == QLatin1String("back"));
@@ -360,14 +473,20 @@ void paintIcon(QPainter& p, const QString& name, int size)
             p.drawLine(QPointF(r.right() - 2.0, r.center().y()), QPointF(r.right() - 5.5, r.center().y() + 3.2));
         }
     } else if (name == QLatin1String("mouse")) {
-        p.setPen(QPen(QColor(0x60, 0x68, 0x74), 1.2));
-        p.setBrush(kPage);
-        p.drawRoundedRect(QRectF(r.left() + 4.5, r.top() + 1.5, 7.0, 11.0), 3.5, 3.5);
-        p.drawLine(QPointF(r.center().x(), r.top() + 1.5), QPointF(r.center().x(), r.top() + 5.0));
+        // 鼠标模式：画个箭头指针，比一个灰椭圆直观
+        p.setRenderHint(QPainter::Antialiasing, false);
+        QPolygonF arrow;
+        arrow << QPointF(4.0, 1.0) << QPointF(4.0, 12.0) << QPointF(6.8, 9.4)
+              << QPointF(8.8, 13.2) << QPointF(10.6, 12.2) << QPointF(8.6, 8.6)
+              << QPointF(12.0, 8.2);
+        p.setPen(QPen(QColor(0x30, 0x30, 0x30), 1));
+        p.setBrush(QColor(0xff, 0xff, 0xff));
+        p.drawPolygon(arrow);
     } else if (name == QLatin1String("bookmark_prev") || name == QLatin1String("bookmark_next")) {
         const bool next = (name == QLatin1String("bookmark_next"));
-        p.setPen(QPen(QColor(0x1f, 0x5f, 0xbf), 1));
-        p.setBrush(QColor(0x6f, 0x9e, 0xe8));
+        // uVision 的书签是一面青色小旗
+        p.setPen(QPen(QColor(0x14, 0x6a, 0x70), 1));
+        p.setBrush(QColor(0x2a, 0xb0, 0xb8));
         QPolygonF ribbon;
         ribbon << QPointF(r.left() + 2.0, r.top() + 1.5) << QPointF(r.left() + 8.0, r.top() + 1.5)
                << QPointF(r.left() + 8.0, r.bottom() - 1.5) << QPointF(r.left() + 5.0, r.bottom() - 4.5)
@@ -382,8 +501,8 @@ void paintIcon(QPainter& p, const QString& name, int size)
             p.drawLine(QPointF(r.left() + 1.0, r.center().y()), QPointF(r.left() + 1.5, r.center().y()));
         }
     } else if (name == QLatin1String("bookmark_delete")) {
-        p.setPen(QPen(QColor(0x1f, 0x5f, 0xbf), 1));
-        p.setBrush(QColor(0x6f, 0x9e, 0xe8));
+        p.setPen(QPen(QColor(0x14, 0x6a, 0x70), 1));
+        p.setBrush(QColor(0x2a, 0xb0, 0xb8));
         QPolygonF ribbon;
         ribbon << QPointF(r.left() + 1.5, r.top() + 1.5) << QPointF(r.left() + 7.0, r.top() + 1.5)
                << QPointF(r.left() + 7.0, r.bottom() - 2.5) << QPointF(r.left() + 4.2, r.bottom() - 5.0)
@@ -394,14 +513,28 @@ void paintIcon(QPainter& p, const QString& name, int size)
         p.drawLine(QPointF(r.right() - 1.5, r.top() + 6.0), QPointF(r.left() + 8.5, r.bottom() - 1.5));
     } else if (name == QLatin1String("indent") || name == QLatin1String("unindent")) {
         const bool in = (name == QLatin1String("indent"));
-        p.setPen(QPen(QColor(0x8a, 0x93, 0x9e), 1));
-        for (int i = 0; i < 3; ++i)
-            p.drawLine(QPointF(r.left() + 5.0, r.top() + 3.0 + i * 4.0), QPointF(r.right() - 1.0, r.top() + 3.0 + i * 4.0));
-        p.setPen(QPen(kGreen.darker(120), 1.5, Qt::SolidLine, Qt::RoundCap));
-        if (in)
-            p.drawLine(QPointF(r.left() + 1.0, r.center().y()), QPointF(r.left() + 3.5, r.center().y()));
-        else
-            p.drawLine(QPointF(r.left() + 1.0, r.center().y()), QPointF(r.left() + 3.5, r.center().y()));
+        const QColor line(0x8a, 0x93, 0x9e);
+        const QColor mark(0x2a, 0x7a, 0x2a);
+        // uVision 的缩进图标：三条灰线 + 左边一个绿色小箭头
+        px(p, 5, 3, 9, 1, line);
+        px(p, 5, 8, 9, 1, line);
+        px(p, 5, 13, 9, 1, line);
+
+        if (in) {
+            // 指向右的箭头
+            px(p, 1, 7, 4, 1, mark);
+            px(p, 2, 6, 1, 1, mark);
+            px(p, 3, 5, 1, 1, mark);
+            px(p, 2, 8, 1, 1, mark);
+            px(p, 3, 9, 1, 1, mark);
+        } else {
+            // 指向左的箭头
+            px(p, 1, 7, 4, 1, mark);
+            px(p, 2, 6, 1, 1, mark);
+            px(p, 1, 5, 1, 1, mark);
+            px(p, 2, 8, 1, 1, mark);
+            px(p, 1, 9, 1, 1, mark);
+        }
     } else if (name == QLatin1String("comment") || name == QLatin1String("uncomment")) {
         p.setPen(QPen(QColor(0x8a, 0x93, 0x9e), 1));
         for (int i = 0; i < 3; ++i)
