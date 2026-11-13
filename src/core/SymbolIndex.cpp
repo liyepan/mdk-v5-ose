@@ -176,7 +176,67 @@ void parseText(const QString& text, FileParse& out)
                         }
                     }
                 }
+            } else if (c0 == '}') {
+                // typedef 的收尾行：} GPIO_TypeDef;
+                // 结构体 / 枚举 / 联合的类型名就在这儿，Ctrl+点击要能跳过来
+                int s = q + 1;
+                while (s < eol && isSpaceTab(d[s].unicode()))
+                    ++s;
+                const int b = s;
+                while (s < eol && isIdentChar(d[s].unicode()))
+                    ++s;
+                int e = s;
+                while (e < eol && isSpaceTab(d[e].unicode()))
+                    ++e;
+                if (s > b && e < eol && d[e] == QLatin1Char(';')) {
+                    ParsedSymbol sym;
+                    sym.name = QString(d + b, s - b);
+                    sym.line = lineNo;
+                    sym.definition = true;
+                    out.symbols.append(sym);
+                }
             } else if (isIdentStart(c0) && (q - i) <= 12) {
+                // struct Foo { / enum Bar { / union Baz {  —— 有标签名的类型
+                {
+                    int w = q;
+                    while (w < eol && isIdentChar(d[w].unicode()))
+                        ++w;
+                    int tagStart = q;
+                    // typedef struct Foo {  这种先跳过 typedef
+                    if (w - q == 7 && startsWithWord(d + q, eol - q, "typedef")) {
+                        int t = w;
+                        while (t < eol && isSpaceTab(d[t].unicode()))
+                            ++t;
+                        tagStart = t;
+                        w = t;
+                        while (w < eol && isIdentChar(d[w].unicode()))
+                            ++w;
+                    }
+
+                    const int wlen = w - tagStart;
+                    const bool isTag = (wlen == 6 && startsWithWord(d + tagStart, wlen, "struct"))
+                                       || (wlen == 4 && startsWithWord(d + tagStart, wlen, "enum"))
+                                       || (wlen == 5 && startsWithWord(d + tagStart, wlen, "union"));
+                    if (isTag) {
+                        int s2 = w;
+                        while (s2 < eol && isSpaceTab(d[s2].unicode()))
+                            ++s2;
+                        const int b2 = s2;
+                        while (s2 < eol && isIdentChar(d[s2].unicode()))
+                            ++s2;
+                        int e2 = s2;
+                        while (e2 < eol && isSpaceTab(d[e2].unicode()))
+                            ++e2;
+                        if (s2 > b2 && (e2 >= eol || d[e2] == QLatin1Char('{'))) {
+                            ParsedSymbol sym;
+                            sym.name = QString(d + b2, s2 - b2);
+                            sym.line = lineNo;
+                            sym.definition = true;
+                            out.symbols.append(sym);
+                        }
+                    }
+                }
+
                 // 行首缩进超过 12 列基本就是语句块里的东西，不可能是声明
                 int s = q;
                 while (s < eol && isDeclChar(d[s].unicode()))

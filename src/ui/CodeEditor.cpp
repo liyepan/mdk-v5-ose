@@ -5,8 +5,10 @@
 #include "ui/CSyntaxHighlighter.h"
 #include "ui/KeilStyle.h"
 
+#include <QApplication>
 #include <QContextMenuEvent>
 #include <QFile>
+#include <QKeyEvent>
 #include <QFileInfo>
 #include <QMenu>
 #include <QMessageBox>
@@ -214,6 +216,47 @@ void CodeEditor::setSymbolChecker(std::function<bool(const QString&)> checker)
     m_symbolChecker = std::move(checker);
 }
 
+void CodeEditor::setJumpResolver(std::function<QList<JumpTarget>(const QString&)> resolver)
+{
+    m_jumpResolver = std::move(resolver);
+}
+
+// 光标是否落在 #include "xxx.h" 的文件名上
+bool CodeEditor::includeAt(const QTextCursor& cursor, int* start, int* end) const
+{
+    static const QRegularExpression includeRe(
+        QStringLiteral("^[ \t]*#[ \t]*include[ \t]*[<\"]([^>\"]+)[>\"]"));
+
+    const QRegularExpressionMatch m = includeRe.match(cursor.block().text());
+    if (!m.hasMatch())
+        return false;
+
+    const int column = cursor.positionInBlock();
+    if (column < m.capturedStart(1) || column > m.capturedEnd(1))
+        return false;
+
+    if (start)
+        *start = m.capturedStart(1);
+    if (end)
+        *end = m.capturedEnd(1);
+    return true;
+}
+
+// 右键时的位置 -> 标识符
+QString CodeEditor::wordAtPosition(const QPoint& pos) const
+{
+    if (m_filePath.isEmpty())
+        return QString();
+
+    const QTextCursor cursor = cursorForPosition(pos);
+    QString word;
+    int start = 0;
+    int end = 0;
+    if (identifierAt(cursor, &word, &start, &end))
+        return word;
+    return QString();
+}
+
 // ---------------------------------------------------------------- 编辑操作
 
 void CodeEditor::indentSelection()
@@ -417,17 +460,25 @@ void CodeEditor::updateHoverSelection(const QTextCursor& cursor, bool ctrlHeld)
 {
     QTextCursor hover;
 
-    if (ctrlHeld && !m_filePath.isEmpty()) {
-        QString word;
+    // 只要能 Ctrl+左键跳过去的东西，悬停时都画下划线：
+    //   #include "x.h" 里的头文件名、符号表里有的标识符
+    if (ctrlHeld && !m_filePath.isEmpty() && !cursor.isNull()) {
         int start = 0;
         int end = 0;
-        if (identifierAt(cursor, &word, &start, &end)) {
-            const bool known = !m_symbolChecker || m_symbolChecker(word);
-            if (known) {
-                hover = cursor;
-                hover.setPosition(cursor.block().position() + start);
-                hover.setPosition(cursor.block().position() + end, QTextCursor::KeepAnchor);
-            }
+        bool underline = false;
+
+        if (includeAt(cursor, &start, &end)) {
+            underline = true;               // 头文件能不能打开在点击时才判断
+        } else {
+            QString word;
+            if (identifierAt(cursor, &word, &start, &end))
+                underline = !m_symbolChecker || m_symbolChecker(word);
+        }
+
+        if (underline) {
+            hover = cursor;
+            hover.setPosition(cursor.block().position() + start);
+            hover.setPosition(cursor.block().position() + end, QTextCursor::KeepAnchor);
         }
     }
 
@@ -449,12 +500,37 @@ void CodeEditor::updateHoverSelection(const QTextCursor& cursor, bool ctrlHeld)
 
 void CodeEditor::mouseMoveEvent(QMouseEvent* event)
 {
+    m_lastMousePos = event->pos();
     if (event->modifiers() & Qt::ControlModifier)
         updateHoverSelection(cursorForPosition(event->pos()), true);
     else
         updateHoverSelection(QTextCursor(), false);
 
     QPlainTextEdit::mouseMoveEvent(event);
+}
+
+// 鼠标不动、只按/松 Ctrl 也要立刻出（收）下划线
+void CodeEditor::refreshHover()
+{
+    const bool ctrl = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
+    if (ctrl && !m_filePath.isEmpty())
+        updateHoverSelection(cursorForPosition(m_lastMousePos), true);
+    else
+        updateHoverSelection(QTextCursor(), false);
+}
+
+void CodeEditor::keyPressEvent(QKeyEvent* event)
+{
+    QPlainTextEdit::keyPressEvent(event);
+    if (event->key() == Qt::Key_Control)
+        refreshHover();
+}
+
+void CodeEditor::keyReleaseEvent(QKeyEvent* event)
+{
+    QPlainTextEdit::keyReleaseEvent(event);
+    if (event->key() == Qt::Key_Control)
+        refreshHover();
 }
 
 void CodeEditor::leaveEvent(QEvent* event)
@@ -554,6 +630,21 @@ void CodeEditor::setEncoding(const QString& name, bool reloadFromDisk)
 void CodeEditor::contextMenuEvent(QContextMenuEvent* event)
 {
     QMenu menu(this);
+
+    // ---- 跳转（只对光标下能识别的标识符出现）----
+    const QString word = wordAtPosition(event->pos());
+    if (!word.isEmpty() && m_jumpResolver) {
+        const QList<JumpTarget> targets = m_jumpResolver(word);
+        for (const JumpTarget& target : targets) {
+            QAction* act = menu.addAction(target.label);
+            act->setToolTip(target.file);
+            connect(act, &QAction::triggered, this, [this, target]() {
+                emit jumpRequested(target.file, target.line);
+            });
+        }
+        if (!targets.isEmpty())
+            menu.addSeparator();
+    }
 
     QAction* actUndo = menu.addAction(QStringLiteral("Undo"));
     actUndo->setEnabled(document()->isUndoAvailable());

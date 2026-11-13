@@ -7,6 +7,7 @@
 #include "core/SymbolIndex.h"
 #include "core/Toolchain.h"
 #include "core/UvprojModel.h"
+#include "ui/CodeEditor.h"   // JumpTarget
 
 class QAction;
 class QComboBox;
@@ -136,6 +137,7 @@ private:
     void formatEditor(CodeEditor* editor);
     bool saveEditor(CodeEditor* editor);
     void ensureSymbolIndex();
+    QList<JumpTarget> jumpTargetsFor(const QString& word);
     QStringList currentIncludeDirs() const;
 
     CodeEditor* openFile(const QString& absolutePath);

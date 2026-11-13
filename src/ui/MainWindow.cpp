@@ -962,6 +962,8 @@ void MainWindow::onNewFile()
         ensureSymbolIndex();
         return !m_symbols.lookup(word).isEmpty();
     });
+    editor->setJumpResolver([this](const QString& word) { return jumpTargetsFor(word); });
+    connect(editor, &CodeEditor::jumpRequested, this, &MainWindow::onJumpTo);
 
     const int index = m_tabs->addTab(editor, QStringLiteral("untitled%1").arg(++untitledCounter));
     m_tabs->setCurrentIndex(index);
@@ -1309,6 +1311,9 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
         ensureSymbolIndex();
         return !m_symbols.lookup(word).isEmpty();
     });
+
+    editor->setJumpResolver([this](const QString& word) { return jumpTargetsFor(word); });
+    connect(editor, &CodeEditor::jumpRequested, this, &MainWindow::onJumpTo);
 
     const int index = m_tabs->addTab(editor, QFileInfo(abs).fileName());
     m_tabs->setTabToolTip(index, abs);
@@ -1804,6 +1809,53 @@ QStringList MainWindow::currentIncludeDirs() const
         dirs << p;
     }
     return dirs;
+}
+
+// 右键菜单里的"跳转定义 / 跳转实现"：
+//   .h 里的那一处叫定义，.c/.cpp 里的函数体叫实现
+//   结构体/宏只在头文件里有，就只给"跳转定义"
+QList<JumpTarget> MainWindow::jumpTargetsFor(const QString& word)
+{
+    QList<JumpTarget> targets;
+    if (word.isEmpty() || !m_project.isValid())
+        return targets;
+
+    ensureSymbolIndex();
+
+    JumpTarget declTarget;
+    JumpTarget implTarget;
+    bool hasDecl = false;
+    bool hasImpl = false;
+
+    for (const SymbolLocation& loc : m_symbols.lookup(word)) {
+        const QString suffix = QFileInfo(loc.file).suffix().toLower();
+        const bool isHeader = (suffix == QLatin1String("h") || suffix == QLatin1String("hpp")
+                               || suffix == QLatin1String("hh") || suffix == QLatin1String("hxx"));
+        const bool isSource = (suffix == QLatin1String("c") || suffix == QLatin1String("cpp")
+                               || suffix == QLatin1String("cc") || suffix == QLatin1String("cxx"));
+
+        if (isSource && !hasImpl) {
+            implTarget = JumpTarget{QStringLiteral("跳转实现"), loc.file, loc.line};
+            hasImpl = true;
+        } else if (isHeader && !hasDecl) {
+            declTarget = JumpTarget{QStringLiteral("跳转定义"), loc.file, loc.line};
+            hasDecl = true;
+        }
+    }
+
+    // 头文件和源文件都没有（比如宏写在 .c 里），就退回到第一处
+    if (!hasDecl && !hasImpl) {
+        const QList<SymbolLocation> all = m_symbols.lookup(word);
+        if (!all.isEmpty())
+            targets.append(JumpTarget{QStringLiteral("跳转定义"), all.first().file, all.first().line});
+        return targets;
+    }
+
+    if (hasImpl)
+        targets.append(implTarget);
+    if (hasDecl)
+        targets.append(declTarget);
+    return targets;
 }
 
 void MainWindow::onWordActivated(const QString& word, const QString& fromFile)
