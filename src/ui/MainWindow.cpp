@@ -39,9 +39,11 @@
 #include <QEvent>
 #include <QMouseEvent>
 #include <QResizeEvent>
+#include <QShowEvent>
 #include <QThread>
 #include <QTimer>
 #include <functional>
+#include <cstdio>
 #include <QMessageBox>
 #include <QStatusBar>
 #include <QStringListModel>
@@ -794,6 +796,12 @@ void MainWindow::createToolBars()
             &MainWindow::onTargetChanged);
     buildBar->addWidget(m_targetCombo);
 
+    // 魔术棒和左边的 Target 下拉框之间留一点缝：默认挨着只有 2px，看着挤
+    auto* wandGap = new QWidget(buildBar);
+    wandGap->setFixedWidth(0);
+    wandGap->setAttribute(Qt::WA_TransparentForMouseEvents);
+    buildBar->addWidget(wandGap);
+
     buildBar->addAction(m_actOptionsTarget);  // 魔术棒
     buildBar->addSeparator();
 
@@ -808,6 +816,51 @@ void MainWindow::createToolBars()
     buildBar->addAction(manage);
 
     populateTargetCombo();
+}
+
+void MainWindow::showEvent(QShowEvent* event)
+{
+    QMainWindow::showEvent(event);
+
+    // 布局要等这一轮事件循环跑完才有准确坐标
+    if (!m_layoutDumped && Timing::enabled()) {
+        m_layoutDumped = true;
+        QTimer::singleShot(0, this, [this]() { dumpToolBarLayout(); });
+    }
+}
+
+// MDK_OSE_TIMING=1 时把每个工具栏、每个按钮的坐标打出来。
+// 用户反馈“这个离左边太近”“那个间距大 1px”的时候，靠它算准确值。
+void MainWindow::dumpToolBarLayout()
+{
+    for (QToolBar* bar : m_toolBars) {
+        const QPoint barPos = bar->mapTo(this, QPoint(0, 0));
+        const QRect barRect = bar->geometry();
+        std::fprintf(stderr, "[layout] toolbar '%s' x=%d y=%d w=%d h=%d\n",
+                     qPrintable(bar->windowTitle()), barPos.x(), barPos.y(),
+                     barRect.width(), barRect.height());
+
+        for (QAction* action : bar->actions()) {
+            const QRect r = bar->actionGeometry(action);
+            const QPoint abs = bar->mapTo(this, r.topLeft());
+            if (action->isSeparator()) {
+                std::fprintf(stderr, "[layout]   %-22s x=%4d w=%3d\n", "(separator)", abs.x(), r.width());
+                continue;
+            }
+            const QString label = action->toolTip().isEmpty()
+                                      ? (action->text().isEmpty() ? action->objectName() : action->text())
+                                      : action->toolTip();
+            std::fprintf(stderr, "[layout]   %-22s x=%4d w=%3d h=%3d\n",
+                         qPrintable(label), abs.x(), r.width(), r.height());
+        }
+
+        // 工具栏里的 QComboBox 不是 action，单独打
+        for (QComboBox* combo : bar->findChildren<QComboBox*>()) {
+            const QPoint abs = combo->mapTo(this, QPoint(0, 0));
+            std::fprintf(stderr, "[layout]   %-22s x=%4d w=%3d (combo)\n",
+                         qPrintable(combo->objectName()), abs.x(), combo->width());
+        }
+    }
 }
 
 void MainWindow::applyToolBarLayout()

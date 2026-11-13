@@ -37,6 +37,7 @@ public:
 protected:
     void closeEvent(QCloseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private slots:
     void onNewFile();
@@ -108,6 +109,7 @@ private:
     void createActions();
     void createMainToolbarActions();
     void applyToolBarLayout();
+    void dumpToolBarLayout();
     void populateSymbolCombo();
     void populateTargetCombo();
     void ensureOverlay();
@@ -166,6 +168,7 @@ private:
     ProjectLoader*  m_loader = nullptr;
     QThread*        m_loadThread = nullptr;
     bool            m_loading = false;
+    bool            m_layoutDumped = false;
     QString         m_loadStage;
     QString         m_loadDetail;
 
