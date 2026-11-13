@@ -56,7 +56,7 @@ internal static class Screenshot
             return;
         }
 
-        frame.Save(outputPath);
+        frame.Save(outputPath, new PngBitmapEncoderOptions());
         Console.WriteLine($"saved {outputPath} ({frame.PixelSize.Width}x{frame.PixelSize.Height})");
 
         if (args.Contains("--shot-map"))
