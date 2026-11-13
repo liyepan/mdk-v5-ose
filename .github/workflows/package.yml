@@ -26,50 +26,6 @@ env:
   APP_NAME: "uVision5-OSE"
 
 jobs:
-  # ---------------------------------------------------------------- Gitea 侧
-  # Gitea 的 push mirror 是 --mirror 强推（隐含 --prune）：GitHub 上多出来的 ref
-  # 会被删掉。Release 是挂在 tag 上的，tag 被 prune 掉，Release 就没了。
-  # 所以正确做法是让 tag 在 Gitea 这边也存在 —— 这个 job 负责补。
-  # 只在 Gitea 上跑（GitHub 上 server_url 是 https://github.com，直接跳过）。
-  gitea-tag:
-    name: Gitea 补版本 tag
-    if: ${{ github.server_url != 'https://github.com' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: 缺 v<版本> 就补一个
-        shell: bash
-        run: |
-          set -uo pipefail
-          version=$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*//p' mdk-v5-ose.pro | head -n1 | tr -d '[:space:]')
-          if [ -z "$version" ]; then
-            echo "读不到 VERSION，跳过"
-            exit 0
-          fi
-          tag="v$version"
-          token="${{ secrets.GITEA_TOKEN }}"
-          [ -n "$token" ] || token="${{ github.token }}"
-          if [ -z "$token" ]; then
-            echo "::warning::拿不到 Gitea token，没法补 $tag"
-            exit 0
-          fi
-          host="${GITHUB_SERVER_URL#https://}"
-          url="https://oauth2:${token}@${host}/${GITHUB_REPOSITORY}.git"
-          if git ls-remote --exit-code --tags "$url" "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "Gitea 上已经有 $tag，不用补"
-            exit 0
-          fi
-          echo "Gitea 上没有 $tag，创建并推送"
-          git tag "$tag" "$GITHUB_SHA" 2>/dev/null || true
-          if ! git push "$url" "refs/tags/$tag"; then
-            echo "::warning::推 $tag 到 Gitea 失败，Release 可能在下一次镜像同步后消失；可手动 git push origin $tag"
-          fi
-
   windows-x86_64:
     name: Windows x86_64
     if: ${{ github.server_url == 'https://github.com' }}
@@ -208,26 +164,20 @@ jobs:
           version=$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*//p' mdk-v5-ose.pro | head -n1 | tr -d '[:space:]')
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # Gitea 的 push mirror 是 --mirror 强推，会删掉 GitHub 上多出来的 tag，
-      # tag 没了 Release 也会跟着消失。配了 GITEA_TOKEN 就把 tag 补回 Gitea。
-      - name: 把 tag 同步回 Gitea（可选）
+      # 只动 GitHub 自己：把这次 Release 要用的 tag 在本仓库里补齐。
+      # Gitea 那边一根手指都不碰 —— 镜像会不会 prune 掉 tag 是 Gitea 侧的事，
+      # 这里只保证 GitHub 上的 Release 每次构建都能拿到自己的 tag。
+      - name: 确保 tag 存在于 GitHub
         env:
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
           TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.meta.outputs.version) }}
         run: |
-          if [ -z "$GITEA_TOKEN" ]; then
-            echo "没有配置 GITEA_TOKEN，跳过；tag 需要手动推到 Gitea"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "GitHub 上已经有 $TAG"
             exit 0
           fi
-          url="https://oauth2:$GITEA_TOKEN@git.linuxacme.com/liyepan/mdk-v5-ose.git"
-          if git ls-remote --exit-code --tags "$url" "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Gitea 已有 $TAG，不用推"
-            exit 0
-          fi
+          echo "GitHub 上没有 $TAG，本地补一个再推（只推 GitHub）"
           git tag "$TAG" "$GITHUB_SHA" 2>/dev/null || true
-          if ! git push "$url" "refs/tags/$TAG"; then
-            echo "::warning::推 tag $TAG 到 Gitea 失败，下次镜像同步可能把这个 Release 删掉"
-          fi
+          git push origin "refs/tags/$TAG"
 
       - name: 下载所有产物
         uses: actions/download-artifact@v4
