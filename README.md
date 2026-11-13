@@ -112,10 +112,9 @@
 （XML 语义无关），其余差异就只有你实际改的那几个值。
 
 工具栏最右边的"工程文件管理"按钮，或者 Project -> Manage Project Items（Alt+M）。
-布局和 uVision 一样，三列并排：
+布局和 uVision 一样，三列并排（uVision 上面那排页签没做，直接就是这三个列表）：
 
 ```
-[Project Items][Folders/Extensions][Books][Project Info/Layer]
 Project Targets:      Groups:              Files:
  + × ↑ ↓              + × ↑ ↓              × ↑ ↓
  Debug                 apl                  main.c

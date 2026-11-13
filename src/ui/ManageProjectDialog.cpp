@@ -16,7 +16,6 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QTabWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -86,10 +85,6 @@ ManageProjectDialog::ManageProjectDialog(const QList<Target>& targets, int curre
     auto* outer = new QVBoxLayout(this);
     outer->setContentsMargins(8, 8, 8, 8);
     outer->setSpacing(8);
-
-    // ---- 页签：只做第一页，其它三页照 uVision 列着但先禁用 ----
-    m_tabs = new QTabWidget;
-    m_tabs->setDocumentMode(false);
 
     auto* page = new QWidget;
     auto* pageLayout = new QVBoxLayout(page);
@@ -185,21 +180,7 @@ ManageProjectDialog::ManageProjectDialog(const QList<Target>& targets, int curre
     bottomRow->addSpacing(2);
     pageLayout->addLayout(bottomRow);
 
-    m_tabs->addTab(page, Lang::t("Project Items"));
-    for (const QString& name : { QStringLiteral("Folders/Extensions"), QStringLiteral("Books"),
-                                 QStringLiteral("Project Info/Layer") }) {
-        auto* placeholder = new QWidget;
-        auto* v = new QVBoxLayout(placeholder);
-        auto* hint = new QLabel(QStringLiteral("%1 \u2014 %2")
-                                    .arg(name, Lang::t("Not implemented yet")));
-        hint->setAlignment(Qt::AlignCenter);
-        hint->setStyleSheet(QStringLiteral("color: #8a8a8a;"));
-        v->addWidget(hint);
-        const int index = m_tabs->addTab(placeholder, name);
-        m_tabs->setTabEnabled(index, false);
-    }
-
-    outer->addWidget(m_tabs, 1);
+    outer->addWidget(page, 1);
 
     // ---- OK / Cancel / Help ----
     auto* box = new QDialogButtonBox;

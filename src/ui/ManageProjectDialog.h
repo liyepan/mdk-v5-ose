@@ -67,5 +67,4 @@ private:
     QListWidget*  m_targetList = nullptr;
     QListWidget*  m_groupList = nullptr;
     QListWidget*  m_fileList = nullptr;
-    QTabWidget*   m_tabs = nullptr;
 };
