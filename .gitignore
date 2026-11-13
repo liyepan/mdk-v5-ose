@@ -1,5 +1,8 @@
 bin/
 obj/
+
+# 配置目录万一落到当前目录（HOME 为空的环境）
+linuxacme/
 .vs/
 *.user
 *.suo

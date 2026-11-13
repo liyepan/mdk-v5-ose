@@ -23,7 +23,15 @@ public sealed class ProjFile
     public int FileType { get; set; }
     public bool Excluded { get; set; }
 
+    // 文件级覆盖选项（FileOption/FileArmAds/Cads/VariousControls）
+    public bool HasOwnOptions { get; set; }
+    public string Defines { get; set; } = "";
+    public string IncludePaths { get; set; } = "";
+    public string Misc { get; set; } = "";
+
     public FileKind Kind => KindOf(Path);
+
+    public static FileKind KindOfPath(string path) => KindOf(path);
 
     public static FileKind KindOf(string path)
     {
@@ -44,7 +52,22 @@ public sealed class ProjGroup
 {
     public string Name { get; set; } = "";
     public bool Excluded { get; set; }
+
+    // 组级覆盖选项（GroupOption/GroupArmAds/Cads/VariousControls）
+    public bool HasOwnOptions { get; set; }
+    public string Defines { get; set; } = "";
+    public string IncludePaths { get; set; } = "";
+    public string Misc { get; set; } = "";
+
     public List<ProjFile> Files { get; set; } = new();
+}
+
+// uVision 的 Before Compile / Before Make / After Make 里的一条用户命令
+public sealed class UserProgram
+{
+    public bool Enabled { get; set; }
+    public string Command { get; set; } = "";
+    public bool StopOnExitCode { get; set; }
 }
 
 public readonly record struct MemoryRegion(uint Start, uint Size)
@@ -91,10 +114,16 @@ public sealed class UvTarget
     public string LinkerMisc { get; set; } = "";
     public string TextAddressRange { get; set; } = "";
     public string DataAddressRange { get; set; } = "";
+    public bool NoStartLib { get; set; }
     public bool UseMicrolib { get; set; }
 
     public MemoryRegion Irom1 { get; set; }
     public MemoryRegion Iram1 { get; set; }
+
+    // 构建前后钩子（每个阶段最多两条，uVision 允许 Prog1/Prog2）
+    public List<UserProgram> BeforeCompile { get; set; } = new();
+    public List<UserProgram> BeforeMake { get; set; } = new();
+    public List<UserProgram> AfterMake { get; set; } = new();
 
     public List<ProjGroup> Groups { get; set; } = new();
 
@@ -126,6 +155,8 @@ public sealed class UvProject
 
     public UvTarget? Target(int index) =>
         index >= 0 && index < Targets.Count ? Targets[index] : null;
+
+    public static FileKind KindOfPath(string path) => ProjFile.KindOf(path);
 
     // uvprojx 里的路径一律用反斜杠
     public string ToAbsolute(string raw)

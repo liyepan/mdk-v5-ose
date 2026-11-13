@@ -119,6 +119,7 @@ public static class UvprojReader
                 t.LinkerMisc = Text(ldads.Element("Misc"));
                 t.TextAddressRange = Text(ldads.Element("TextAddressRange"));
                 t.DataAddressRange = Text(ldads.Element("DataAddressRange"));
+                t.NoStartLib = Flag(ldads.Element("noStLib"), false);
             }
 
             var misc = armAds.Element("ArmAdsMisc");
@@ -137,6 +138,12 @@ public static class UvprojReader
                 t.Iram1 = RegionFromCpu(t.Cpu, "IRAM");
         }
 
+        // <BeforeCompile><RunUserProg1>1</RunUserProg1><UserProg1Name>...</UserProg1Name>
+        //                 <nStopU1X>0</nStopU1X> ...
+        t.BeforeCompile = ReadUserPrograms(common?.Element("BeforeCompile"), "nStopU");
+        t.BeforeMake = ReadUserPrograms(common?.Element("BeforeMake"), "nStopB");
+        t.AfterMake = ReadUserPrograms(common?.Element("AfterMake"), "nStopA");
+
         var groups = tEl.Element("Groups");
         if (groups is not null)
         {
@@ -146,8 +153,17 @@ public static class UvprojReader
                 if (string.IsNullOrEmpty(g.Name))
                     g.Name = "Group";
 
-                var gCommon = gEl.Element("GroupOption")?.Element("CommonProperty");
-                g.Excluded = !Flag(gCommon?.Element("IncludeInBuild"), true);
+                var gOption = gEl.Element("GroupOption");
+                g.Excluded = !Flag(gOption?.Element("CommonProperty")?.Element("IncludeInBuild"), true);
+
+                var gVarious = gOption?.Element("GroupArmAds")?.Element("Cads")?.Element("VariousControls");
+                if (gVarious is not null)
+                {
+                    g.HasOwnOptions = true;
+                    g.Defines = Text(gVarious.Element("Define"));
+                    g.IncludePaths = Text(gVarious.Element("IncludePath"));
+                    g.Misc = Text(gVarious.Element("MiscControls"));
+                }
 
                 var files = gEl.Element("Files");
                 if (files is not null)
@@ -161,8 +177,17 @@ public static class UvprojReader
                             FileType = Int(fEl.Element("FileType"), 0),
                             GroupName = g.Name
                         };
-                        var fCommon = fEl.Element("FileOption")?.Element("CommonProperty");
-                        f.Excluded = !Flag(fCommon?.Element("IncludeInBuild"), true);
+                        var fOption = fEl.Element("FileOption");
+                        f.Excluded = !Flag(fOption?.Element("CommonProperty")?.Element("IncludeInBuild"), true);
+
+                        var fVarious = fOption?.Element("FileArmAds")?.Element("Cads")?.Element("VariousControls");
+                        if (fVarious is not null)
+                        {
+                            f.HasOwnOptions = true;
+                            f.Defines = Text(fVarious.Element("Define"));
+                            f.IncludePaths = Text(fVarious.Element("IncludePath"));
+                            f.Misc = Text(fVarious.Element("MiscControls"));
+                        }
                         g.Files.Add(f);
                     }
                 }
@@ -172,6 +197,28 @@ public static class UvprojReader
         }
 
         return t;
+    }
+
+    private static List<UserProgram> ReadUserPrograms(XElement? el, string stopTagPrefix)
+    {
+        var list = new List<UserProgram>();
+        if (el is null)
+            return list;
+
+        for (var i = 1; i <= 2; i++)
+        {
+            var cmd = Text(el.Element($"UserProg{i}Name"));
+            if (cmd.Length == 0)
+                continue;
+
+            list.Add(new UserProgram
+            {
+                Command = cmd,
+                Enabled = Flag(el.Element($"RunUserProg{i}"), false),
+                StopOnExitCode = Text(el.Element($"{stopTagPrefix}{i}X")) != "0"
+            });
+        }
+        return list;
     }
 
     private static MemoryRegion ReadRegion(XElement? el)

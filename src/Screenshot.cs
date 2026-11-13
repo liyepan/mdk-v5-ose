@@ -31,7 +31,7 @@ internal static class Screenshot
             .WithInterFont()
             .SetupWithoutStarting();
 
-        var window = new MainWindow();
+        var window = new MainWindow { RestoreLastProject = false };
         window.Show();
 
         if (!string.IsNullOrEmpty(project))

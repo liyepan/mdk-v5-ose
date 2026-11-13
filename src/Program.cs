@@ -9,19 +9,27 @@ namespace UvisionOse;
 internal static class Program
 {
     [STAThread]
-    public static void Main(string[] args)
+    public static int Main(string[] args)
     {
         // --screenshot <png> [--shot-delay ms] [--shot-map] [--shot-info]：
         // 离屏渲染一张界面图，跑 CI / 没有显示器的时候验证用
+        // --build <uvprojx>：命令行构建，输出走 stdout，方便 CI
+        if (Array.IndexOf(args, "--build") >= 0)
+        {
+            AttachParentConsole();
+            return Cli.RunBuild(args);
+        }
+
         var shotIndex = Array.IndexOf(args, "--screenshot");
         if (shotIndex >= 0 && shotIndex + 1 < args.Length)
         {
             AttachParentConsole();
             Screenshot.Run(args, args[shotIndex + 1]);
-            return;
+            return 0;
         }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        return 0;
     }
 
     // GUI 程序（WinExe）在 Windows 上默认不占用父控制台，
