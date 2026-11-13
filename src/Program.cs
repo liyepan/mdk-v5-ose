@@ -1,5 +1,6 @@
 using System;
-using System.Linq;
+using System.IO;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Headless;
 
@@ -10,15 +11,44 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // --screenshot <png> [--shot-delay ms]：离屏渲染一张界面图，跑 CI / 验证用
+        // --screenshot <png> [--shot-delay ms] [--shot-map] [--shot-info]：
+        // 离屏渲染一张界面图，跑 CI / 没有显示器的时候验证用
         var shotIndex = Array.IndexOf(args, "--screenshot");
         if (shotIndex >= 0 && shotIndex + 1 < args.Length)
         {
+            AttachParentConsole();
             Screenshot.Run(args, args[shotIndex + 1]);
             return;
         }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+
+    // GUI 程序（WinExe）在 Windows 上默认不占用父控制台，
+    // 那么在 cmd 里跑 --shot-info 就什么也看不到。这里主动挂到父控制台上。
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool AttachConsole(int dwProcessId);
+
+    private const int AttachParentProcess = -1;
+
+    private static void AttachParentConsole()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        try
+        {
+            if (!AttachConsole(AttachParentProcess))
+                return;
+            var stdout = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
+            var stderr = new StreamWriter(Console.OpenStandardError()) { AutoFlush = true };
+            Console.SetOut(stdout);
+            Console.SetError(stderr);
+        }
+        catch
+        {
+            // 挂不上就算了，输出丢掉比崩掉强
+        }
     }
 
     // 设计器和 StartWithClassicDesktopLifetime 都用这个
