@@ -965,9 +965,18 @@ void MainWindow::onNewFile()
     editor->setJumpResolver([this](const QString& word) { return jumpTargetsFor(word); });
     connect(editor, &CodeEditor::jumpRequested, this, &MainWindow::onJumpTo);
 
-    const int index = m_tabs->addTab(editor, QStringLiteral("untitled%1").arg(++untitledCounter));
+    const QString baseTitle = QStringLiteral("untitled%1").arg(++untitledCounter);
+    editor->setProperty("baseTitle", baseTitle);
+
+    const int index = m_tabs->addTab(editor, baseTitle);
     m_tabs->setCurrentIndex(index);
     m_tabs->tabBar()->setTabData(index, nextTabColor());
+    m_tabs->setTabToolTip(index, Lang::t("Unsaved file"));
+
+    // 改过没保存 -> 标题前面加 *
+    connect(editor->document(), &QTextDocument::modificationChanged, this,
+            [this, editor](bool) { refreshTabTitle(editor); });
+
     editor->setFocus();
     updateEncodingLabel();
 }
@@ -984,29 +993,69 @@ void MainWindow::onOpenFile()
 
 void MainWindow::onSaveAs()
 {
-    CodeEditor* editor = currentEditor();
+    saveAsFor(currentEditor());
+}
+
+// 返回 false 表示用户取消或者保存失败
+bool MainWindow::saveAsFor(CodeEditor* editor)
+{
     if (!editor)
-        return;
+        return false;
 
     QString suggested = editor->filePath();
-    if (suggested.isEmpty() && m_project.isValid())
-        suggested = m_project.directory() + QLatin1Char('/')
-                    + m_tabs->tabText(m_tabs->currentIndex());
+    if (suggested.isEmpty()) {
+        const QString base = editor->property("baseTitle").toString();
+        if (m_project.isValid())
+            suggested = m_project.directory() + QLatin1Char('/') + base;
+        else
+            suggested = base;
+    }
 
     const QString path = QFileDialog::getSaveFileName(this, Lang::t("Save As"), suggested,
                                                      QStringLiteral("C Source (*.c);;All Files (*)"));
     if (path.isEmpty())
-        return;
+        return false;
 
     editor->setFilePath(path);
     if (!saveEditor(editor))
+        return false;
+
+    editor->setProperty("baseTitle", QFileInfo(path).fileName());
+    const int index = m_tabs->indexOf(editor);
+    if (index >= 0)
+        m_tabs->setTabToolTip(index, path);
+    refreshTabTitle(editor);
+    return true;
+}
+
+// 存一个编辑器：未命名文件先走另存为。返回是否已经存好
+bool MainWindow::saveEditorInteractive(CodeEditor* editor)
+{
+    if (!editor)
+        return true;
+
+    if (editor->filePath().isEmpty())
+        return saveAsFor(editor);
+
+    return saveEditor(editor);
+}
+
+// 标签页标题：改过没保存就在前面加个 *
+void MainWindow::refreshTabTitle(CodeEditor* editor)
+{
+    if (!editor)
         return;
 
     const int index = m_tabs->indexOf(editor);
-    if (index >= 0) {
-        m_tabs->setTabText(index, QFileInfo(path).fileName());
-        m_tabs->setTabToolTip(index, path);
-    }
+    if (index < 0)
+        return;
+
+    QString base = editor->property("baseTitle").toString();
+    if (base.isEmpty())
+        base = QFileInfo(editor->filePath()).fileName();
+
+    const bool modified = editor->document()->isModified();
+    m_tabs->setTabText(index, modified ? QStringLiteral("*") + base : base);
 }
 
 void MainWindow::onNewProject()
@@ -1315,7 +1364,10 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     editor->setJumpResolver([this](const QString& word) { return jumpTargetsFor(word); });
     connect(editor, &CodeEditor::jumpRequested, this, &MainWindow::onJumpTo);
 
+    editor->setProperty("baseTitle", QFileInfo(abs).fileName());
     const int index = m_tabs->addTab(editor, QFileInfo(abs).fileName());
+    connect(editor->document(), &QTextDocument::modificationChanged, this,
+            [this, editor](bool) { refreshTabTitle(editor); });
     m_tabs->setTabToolTip(index, abs);
 
     // 同一个文件始终同一种颜色，新文件取下一种
@@ -1366,11 +1418,9 @@ void MainWindow::onTabCloseRequested(int index)
         if (answer == QMessageBox::Cancel)
             return;
         if (answer == QMessageBox::Save) {
-            QString error;
-            if (!editor->saveFile(&error)) {
-                QMessageBox::warning(this, Lang::t("Save"), error);
+            // 未命名的文件会先弹另存为；用户取消就不关
+            if (!saveEditorInteractive(editor))
                 return;
-            }
         }
     }
 
@@ -1631,8 +1681,24 @@ void MainWindow::populateSymbolCombo()
 
     // 几万个符号用 addItems 一个个插会很慢，直接换掉模型是一次性的
     m_symbolModel->setStringList(names);
-    // 默认显示第一个符号，而不是空白
-    m_symbolCombo->setCurrentIndex(names.isEmpty() ? -1 : 0);
+    // 默认显示一个符号，而不是空白。优先挑不像宏的那个：
+    // 全大写（BOARD_H / GPIO_PIN_0）排在前面，当默认值很难看
+    int defaultIndex = 0;
+    for (int i = 0; i < names.size(); ++i) {
+        const QString& name = names.at(i);
+        bool allCaps = true;
+        for (const QChar c : name) {
+            if (c.isLetter() && c != c.toUpper()) {
+                allCaps = false;
+                break;
+            }
+        }
+        if (!allCaps) {
+            defaultIndex = i;
+            break;
+        }
+    }
+    m_symbolCombo->setCurrentIndex(names.isEmpty() ? -1 : defaultIndex);
     m_symbolCombo->setToolTip(QStringLiteral("%1 symbols").arg(names.size()));
 }
 
@@ -1759,9 +1825,9 @@ void MainWindow::onSaveAll()
     for (int i = 0; i < m_tabs->count(); ++i) {
         auto* editor = qobject_cast<CodeEditor*>(m_tabs->widget(i));
         if (editor && editor->document()->isModified()) {
-            QString error;
-            if (!editor->saveFile(&error))
-                QMessageBox::warning(this, Lang::t("Save"), error);
+            // 未命名的会弹另存为；用户取消就停下，别接着烦他
+            if (!saveEditorInteractive(editor))
+                return;
         }
     }
 }
@@ -2250,6 +2316,38 @@ void MainWindow::saveWindowState()
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    // 关窗口前先把没保存的文件问一遍，别默默丢改动
+    int modifiedCount = 0;
+    for (int i = 0; i < m_tabs->count(); ++i) {
+        auto* editor = qobject_cast<CodeEditor*>(m_tabs->widget(i));
+        if (editor && editor->document()->isModified())
+            ++modifiedCount;
+    }
+
+    if (modifiedCount > 0) {
+        const auto answer = QMessageBox::question(
+            this, Lang::t("Save Changes"),
+            Lang::t("%1 file(s) have unsaved changes. Save before closing?").arg(modifiedCount),
+            QMessageBox::SaveAll | QMessageBox::Discard | QMessageBox::Cancel,
+            QMessageBox::SaveAll);
+
+        if (answer == QMessageBox::Cancel) {
+            event->ignore();
+            return;
+        }
+        if (answer == QMessageBox::SaveAll) {
+            for (int i = 0; i < m_tabs->count(); ++i) {
+                auto* editor = qobject_cast<CodeEditor*>(m_tabs->widget(i));
+                if (!editor || !editor->document()->isModified())
+                    continue;
+                if (!saveEditorInteractive(editor)) {
+                    event->ignore();     // 另存为被取消
+                    return;
+                }
+            }
+        }
+    }
+
     saveWindowState();
     event->accept();
 }

@@ -156,6 +156,9 @@ const QHash<QString, QString>& dictionary()
         add("Open File", QStringLiteral("打开文件"));
         add("Save Changes", QStringLiteral("保存修改"));
         add("%1 has been modified. Save changes?", QStringLiteral("%1 已被修改，是否保存？"));
+        add("Unsaved file", QStringLiteral("未保存的文件"));
+        add("%1 file(s) have unsaved changes. Save before closing?",
+            QStringLiteral("%1 个文件有未保存的修改，关闭前保存吗？"));
         add("(empty)", QStringLiteral("（空）"));
         add("Options for Target", QStringLiteral("目标选项"));
         add("Options for File", QStringLiteral("文件选项"));
