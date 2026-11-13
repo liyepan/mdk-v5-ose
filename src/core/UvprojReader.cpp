@@ -420,6 +420,131 @@ bool saveTarget(const QString& path, const Target& target, QString* error)
     return true;
 }
 
+bool saveGroups(const QString& path, const Target& target, QString* error)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        if (error)
+            *error = QStringLiteral("无法读取工程文件: ") + file.errorString();
+        return false;
+    }
+
+    QDomDocument doc;
+    QString parseError;
+    int line = 0;
+    int column = 0;
+    if (!doc.setContent(&file, &parseError, &line, &column)) {
+        if (error)
+            *error = QStringLiteral("解析失败 (%1:%2): %3").arg(line).arg(column).arg(parseError);
+        return false;
+    }
+    file.close();
+
+    QDomElement root = doc.documentElement();
+    QDomElement targetsEl = root.firstChildElement(QStringLiteral("Targets"));
+
+    QDomElement wanted;
+    for (QDomElement tEl = targetsEl.firstChildElement(QStringLiteral("Target"));
+         !tEl.isNull(); tEl = tEl.nextSiblingElement(QStringLiteral("Target"))) {
+        if (childText(tEl, QStringLiteral("TargetName")) == target.name) {
+            wanted = tEl;
+            break;
+        }
+    }
+
+    if (wanted.isNull()) {
+        if (error)
+            *error = QStringLiteral("找不到 Target: ") + target.name;
+        return false;
+    }
+
+    // 先把旧的分组记下来，等会儿按名字把组级/文件级的选项捞回来
+    QHash<QString, QDomElement> oldGroups;
+    QHash<QString, QDomElement> oldFiles;
+    const QDomElement oldGroupsEl = wanted.firstChildElement(QStringLiteral("Groups"));
+    if (!oldGroupsEl.isNull()) {
+        for (QDomElement gEl = oldGroupsEl.firstChildElement(QStringLiteral("Group"));
+             !gEl.isNull(); gEl = gEl.nextSiblingElement(QStringLiteral("Group"))) {
+            const QString name = childText(gEl, QStringLiteral("GroupName"));
+            oldGroups.insert(name, gEl);
+            const QDomElement filesEl = gEl.firstChildElement(QStringLiteral("Files"));
+            for (QDomElement fEl = filesEl.firstChildElement(QStringLiteral("File"));
+                 !fEl.isNull(); fEl = fEl.nextSiblingElement(QStringLiteral("File"))) {
+                oldFiles.insert(childText(fEl, QStringLiteral("FilePath")), fEl);
+            }
+        }
+        wanted.removeChild(oldGroupsEl);
+    }
+
+    QDomElement groupsEl = doc.createElement(QStringLiteral("Groups"));
+    wanted.appendChild(groupsEl);
+
+    auto appendText = [&doc](QDomElement parent, const QString& tag, const QString& value) {
+        QDomElement el = doc.createElement(tag);
+        el.appendChild(doc.createTextNode(value));
+        parent.appendChild(el);
+        return el;
+    };
+
+    for (const ProjGroup& group : target.groups) {
+        QDomElement gEl = doc.createElement(QStringLiteral("Group"));
+        appendText(gEl, QStringLiteral("GroupName"), group.name);
+
+        // 组级选项（GroupOption 之类）从旧节点搬过来
+        const auto oldGroup = oldGroups.constFind(group.name);
+        if (oldGroup != oldGroups.constEnd()) {
+            for (QDomNode node = oldGroup->firstChild(); !node.isNull(); node = node.nextSibling()) {
+                if (!node.isElement())
+                    continue;
+                const QString tag = node.toElement().tagName();
+                if (tag == QLatin1String("GroupName") || tag == QLatin1String("Files"))
+                    continue;
+                gEl.appendChild(node.cloneNode(true));
+            }
+        }
+
+        QDomElement filesEl = doc.createElement(QStringLiteral("Files"));
+        gEl.appendChild(filesEl);
+
+        for (const ProjFile& pf : group.files) {
+            QDomElement fEl = doc.createElement(QStringLiteral("File"));
+            appendText(fEl, QStringLiteral("FileName"), pf.name);
+            appendText(fEl, QStringLiteral("FileType"), QString::number(pf.fileType));
+            appendText(fEl, QStringLiteral("FilePath"), pf.path);
+
+            const auto oldFile = oldFiles.constFind(pf.path);
+            if (oldFile != oldFiles.constEnd()) {
+                for (QDomNode node = oldFile->firstChild(); !node.isNull(); node = node.nextSibling()) {
+                    if (!node.isElement())
+                        continue;
+                    const QString tag = node.toElement().tagName();
+                    if (tag == QLatin1String("FileName") || tag == QLatin1String("FileType")
+                        || tag == QLatin1String("FilePath"))
+                        continue;
+                    fEl.appendChild(node.cloneNode(true));
+                }
+            }
+
+            filesEl.appendChild(fEl);
+        }
+
+        groupsEl.appendChild(gEl);
+    }
+
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        if (error)
+            *error = QStringLiteral("无法写入工程文件: ") + file.errorString();
+        return false;
+    }
+
+    QTextStream ts(&file);
+    ts.setCodec("UTF-8");
+    ts << doc.toString(2);
+    ts.flush();
+    file.close();
+    return true;
+}
+
 QString resolvePath(const QString& projectDir, const QString& relative)
 {
     QString p = relative;

@@ -35,6 +35,7 @@ set(APP_SOURCES
     src/ui/CodeEditor.cpp
     src/ui/ProjectTree.cpp
     src/ui/BuildOutput.cpp
+    src/ui/ManageProjectDialog.cpp
     src/ui/OptionsDialog.cpp
     src/ui/LoadingOverlay.cpp
     src/ui/MainWindow.cpp
@@ -57,6 +58,7 @@ set(APP_HEADERS
     src/ui/CodeEditor.h
     src/ui/ProjectTree.h
     src/ui/BuildOutput.h
+    src/ui/ManageProjectDialog.h
     src/ui/OptionsDialog.h
     src/ui/LoadingOverlay.h
     src/ui/MainWindow.h

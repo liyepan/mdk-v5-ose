@@ -54,6 +54,7 @@ private slots:
     void onSave();
     void onSaveAll();
     void onOptionsForTarget();
+    void onManageProjectItems();
     void onOptionsForFile(const QString& path);
     void onConfigureToolchain();
     void onBuild();

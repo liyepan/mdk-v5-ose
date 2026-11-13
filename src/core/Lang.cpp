@@ -43,6 +43,17 @@ const QHash<QString, QString>& dictionary()
         add("Symbols", QStringLiteral("符号"));
         add("(no project)", QStringLiteral("(无工程)"));
         add("Manage Project Items", QStringLiteral("工程文件管理"));
+        add("New Group", QStringLiteral("新建分组"));
+        add("NewGroup", QStringLiteral("新分组"));
+        add("Add Files...", QStringLiteral("添加文件..."));
+        add("Add Files", QStringLiteral("添加文件"));
+        add("Remove", QStringLiteral("删除"));
+        add("Move Up", QStringLiteral("上移"));
+        add("Move Down", QStringLiteral("下移"));
+        add("Groups and files of this target", QStringLiteral("当前 Target 的分组和文件"));
+        add("Remove the selected group(s) and all files inside them?",
+            QStringLiteral("删除选中的分组及其中所有文件？"));
+        add("Open a project first.", QStringLiteral("请先打开一个工程。"));
         add("Insert Breakpoint", QStringLiteral("插入断点"));
         add("Delete Breakpoint", QStringLiteral("删除断点"));
         add("Delete All Breakpoints (Target)", QStringLiteral("清空当前 Target 的断点"));

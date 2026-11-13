@@ -10,6 +10,7 @@
 #include "ui/CodeEditor.h"
 #include "ui/KeilStyle.h"
 #include "ui/LoadingOverlay.h"
+#include "ui/ManageProjectDialog.h"
 #include "ui/OptionsDialog.h"
 #include "ui/ProjectTree.h"
 
@@ -592,6 +593,11 @@ void MainWindow::createMenus()
 
     QMenu* projectMenu = menuBar()->addMenu(Lang::t("&Project"));
     projectMenu->addAction(m_actOptionsTarget);
+    // 工程管理器（增删分组 / 文件）
+    QAction* manageItems = projectMenu->addAction(KeilStyle::icon(QStringLiteral("manage"), 16),
+                                                  Lang::t("Manage Project Items"),
+                                                  this, &MainWindow::onManageProjectItems);
+    manageItems->setShortcut(QKeySequence(QStringLiteral("Alt+M")));
     projectMenu->addSeparator();
     projectMenu->addAction(m_actBuild);
     projectMenu->addAction(m_actRebuild);
@@ -807,11 +813,7 @@ void MainWindow::createToolBars()
     auto* manage = new QAction(KeilStyle::icon(QStringLiteral("manage")),
                                Lang::t("Manage Project Items"), this);
     manage->setToolTip(Lang::t("Manage Project Items"));
-    connect(manage, &QAction::triggered, this, [this]() {
-        QMessageBox::information(
-            this, Lang::t("Manage Project Items"),
-            QStringLiteral("工程的分组/文件增删还没实现，先在 Keil 里改 .uvprojx。"));
-    });
+    connect(manage, &QAction::triggered, this, &MainWindow::onManageProjectItems);
     buildBar->addAction(manage);
 
     populateTargetCombo();
@@ -2133,6 +2135,60 @@ void MainWindow::onConfigureToolchain()
     Settings::instance().sync();
     m_engine->setToolchain(m_toolchain);
     updateCompilerStatus();
+}
+
+// 工程管理器：增删分组和文件，改完写回 .uvprojx 并刷新工程树
+void MainWindow::onManageProjectItems()
+{
+    if (!m_project.isValid()) {
+        QMessageBox::information(this, Lang::t("Manage Project Items"),
+                                 Lang::t("Open a project first."));
+        return;
+    }
+
+    Target* target = m_project.target(m_activeTarget);
+    if (!target)
+        return;
+
+    ManageProjectDialog dialog(*target, m_project.directory(), this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    const QList<ProjGroup> groups = dialog.groups();
+    if (groups.size() == target->groups.size()) {
+        // 什么都没改就别动文件（ProjGroup 没定义 ==，逐个字段比）
+        bool same = true;
+        for (int i = 0; i < groups.size() && same; ++i) {
+            const ProjGroup& a = groups.at(i);
+            const ProjGroup& b = target->groups.at(i);
+            if (a.name != b.name || a.files.size() != b.files.size()) {
+                same = false;
+                break;
+            }
+            for (int j = 0; j < a.files.size(); ++j) {
+                if (a.files.at(j).path != b.files.at(j).path) {
+                    same = false;
+                    break;
+                }
+            }
+        }
+        if (same)
+            return;
+    }
+
+    Target updated = *target;
+    updated.groups = groups;
+
+    QString error;
+    if (!Uvproj::saveGroups(m_project.filePath, updated, &error)) {
+        QMessageBox::warning(this, Lang::t("Manage Project Items"), error);
+        return;
+    }
+
+    target->groups = groups;
+    m_symbols.clear();                 // 文件列表变了，符号表要重扫
+    applyProject();
+    m_statusMessage->setText(QStringLiteral("工程已更新：%1 个分组").arg(groups.size()));
 }
 
 void MainWindow::onOptionsForTarget()
