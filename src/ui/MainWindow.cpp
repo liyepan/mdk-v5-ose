@@ -1704,7 +1704,7 @@ void MainWindow::onSave()
 
     // Ctrl+S = 先格式化再存盘
     if (Settings::instance().formatOnSave())
-        formatEditor(editor);
+        formatEditor(editor, false);
 
     saveEditor(editor);
 }
@@ -1722,7 +1722,7 @@ bool MainWindow::saveEditor(CodeEditor* editor)
     return true;
 }
 
-void MainWindow::formatEditor(CodeEditor* editor)
+void MainWindow::formatEditor(CodeEditor* editor, bool interactive)
 {
     if (!editor || editor->filePath().isEmpty())
         return;
@@ -1730,22 +1730,27 @@ void MainWindow::formatEditor(CodeEditor* editor)
     const Formatter::Result result = Formatter::format(editor->toPlainText(), editor->filePath());
     if (!result.ok) {
         m_statusMessage->setText(QStringLiteral("格式化失败: %1").arg(result.error));
+
+        // 手动触发的才弹框（边上边存时弹框太烦），并且顺手把配置向导打开
+        if (interactive) {
+            const auto answer = QMessageBox::question(
+                this, QStringLiteral("格式化"),
+                result.error + QStringLiteral("\n\n现在就打开编译器配置去指定 clang-format？"),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+            if (answer == QMessageBox::Yes)
+                onConfigureToolchain();
+        }
         return;
     }
 
     editor->applyFormattedText(result.text);
-
-    if (result.engine == QLatin1String("clang-format"))
-        m_statusMessage->setText(QStringLiteral("已用 clang-format 格式化"));
-    else
-        m_statusMessage->setText(
-            QStringLiteral("已用内置缩进器格式化（%1）").arg(result.error));
+    m_statusMessage->setText(QStringLiteral("已用 clang-format 格式化"));
 }
 
 void MainWindow::onFormatDocument()
 {
     if (CodeEditor* editor = currentEditor())
-        formatEditor(editor);
+        formatEditor(editor, true);
 }
 
 void MainWindow::onSaveAll()

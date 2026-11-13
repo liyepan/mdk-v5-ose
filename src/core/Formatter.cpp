@@ -10,69 +10,7 @@
 
 namespace {
 
-// 数一行的花括号净增量，跳过字符串、字符常量和注释
-int braceDelta(const QString& line, bool& inBlockComment)
-{
-    int delta = 0;
-    bool inString = false;
-    bool inChar = false;
-    bool escaped = false;
-
-    for (int i = 0; i < line.size(); ++i) {
-        const QChar c = line.at(i);
-
-        if (inBlockComment) {
-            if (c == QLatin1Char('*') && i + 1 < line.size()
-                && line.at(i + 1) == QLatin1Char('/')) {
-                inBlockComment = false;
-                ++i;
-            }
-            continue;
-        }
-
-        if (inString || inChar) {
-            if (escaped) {
-                escaped = false;
-                continue;
-            }
-            if (c == QLatin1Char('\\')) {
-                escaped = true;
-                continue;
-            }
-            if (inString && c == QLatin1Char('"'))
-                inString = false;
-            else if (inChar && c == QLatin1Char('\''))
-                inChar = false;
-            continue;
-        }
-
-        if (c == QLatin1Char('/') && i + 1 < line.size()) {
-            if (line.at(i + 1) == QLatin1Char('/'))
-                break;
-            if (line.at(i + 1) == QLatin1Char('*')) {
-                inBlockComment = true;
-                ++i;
-                continue;
-            }
-        }
-
-        if (c == QLatin1Char('"')) {
-            inString = true;
-            continue;
-        }
-        if (c == QLatin1Char('\'')) {
-            inChar = true;
-            continue;
-        }
-        if (c == QLatin1Char('{'))
-            ++delta;
-        else if (c == QLatin1Char('}'))
-            --delta;
-    }
-
-    return delta;
-}
-
+// 没有 .clang-format 时用的兜底风格（和工程默认风格一致）
 const char* kFallbackStyle =
     "{BasedOnStyle: LLVM, IndentWidth: 4, TabWidth: 4, UseTab: Never, "
     "BreakBeforeBraces: Allman, ColumnLimit: 0, "
@@ -165,79 +103,18 @@ Formatter::Result Formatter::runClangFormat(const QString& clang, const QString&
     return r;
 }
 
-QString Formatter::builtinIndent(const QString& input)
-{
-    // 只改行首空白，其它一个字符都不动，所以永远不会改坏代码
-    QStringList result;
-    const QStringList lines = input.split(QLatin1Char('\n'));
-
-    int depth = 0;
-    bool inBlockComment = false;
-
-    for (const QString& rawLine : lines) {
-        QString line = rawLine;
-        while (!line.isEmpty()
-               && (line.at(line.size() - 1) == QLatin1Char(' ')
-                   || line.at(line.size() - 1) == QLatin1Char('\t')))
-            line.chop(1);
-
-        const QString trimmed = line.trimmed();
-
-        if (trimmed.isEmpty()) {
-            result << QString();
-            continue;
-        }
-
-        if (!inBlockComment && trimmed.startsWith(QLatin1Char('#'))) {
-            result << trimmed;
-            const int delta = braceDelta(trimmed, inBlockComment);
-            depth += delta;
-            if (depth < 0)
-                depth = 0;
-            continue;
-        }
-
-        if (inBlockComment) {
-            result << QString(depth * 4, QLatin1Char(' ')) + trimmed;
-            braceDelta(trimmed, inBlockComment);
-            continue;
-        }
-
-        bool dedent = trimmed.startsWith(QLatin1String("case "))
-                      || trimmed.startsWith(QLatin1String("default:"));
-        int lineDepth = depth - (dedent ? 1 : 0);
-        if (trimmed.startsWith(QLatin1Char('}')))
-            --lineDepth;
-        if (lineDepth < 0)
-            lineDepth = 0;
-
-        result << QString(lineDepth * 4, QLatin1Char(' ')) + trimmed;
-
-        depth += braceDelta(trimmed, inBlockComment);
-        if (depth < 0)
-            depth = 0;
-    }
-
-    return result.join(QLatin1Char('\n'));
-}
-
 Formatter::Result Formatter::format(const QString& input, const QString& filePath)
 {
-    Result r;
     const QString clang = detectClangFormat();
-    if (!clang.isEmpty()) {
-        r = runClangFormat(clang, input, filePath);
-        if (r.ok)
-            return r;
+    if (clang.isEmpty()) {
+        Result r;
+        r.engine = QStringLiteral("clang-format");
+        r.error = QStringLiteral(
+            "没找到 clang-format。格式化只用它：装一个 LLVM，"
+            "或者在 Tools -> Configure Toolchain 里指定 clang-format 路径。");
+        return r;
     }
 
-    Result fallback;
-    fallback.ok = true;
-    fallback.engine = QStringLiteral("builtin");
-    fallback.text = builtinIndent(input);
-    if (clang.isEmpty())
-        fallback.error = QStringLiteral("未找到 clang-format，已使用内置缩进器");
-    else
-        fallback.error = r.error;
-    return fallback;
+    // 有 clang-format 就只认它，失败就报错，不再拿内置缩进器偷偷顶上
+    return runClangFormat(clang, input, filePath);
 }

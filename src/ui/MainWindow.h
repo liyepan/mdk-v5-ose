@@ -134,7 +134,7 @@ private:
     QColor nextTabColor();
 
     void revealBuildOutput();
-    void formatEditor(CodeEditor* editor);
+    void formatEditor(CodeEditor* editor, bool interactive);
     bool saveEditor(CodeEditor* editor);
     void ensureSymbolIndex();
     QList<JumpTarget> jumpTargetsFor(const QString& word);

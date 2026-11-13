@@ -73,11 +73,17 @@ public:
 
 private:
     void browse();
+    void browseClangFormat();
     void refreshStatus();
+    void refreshClangStatus();
     void accept() override;
 
     Toolchain  m_toolchain;
     QLineEdit* m_dir = nullptr;
     QComboBox* m_family = nullptr;
     QLabel*    m_status = nullptr;
+
+    // 格式化用的 clang-format（可以在这一起配）
+    QLineEdit* m_clangFormat = nullptr;
+    QLabel*    m_clangStatus = nullptr;
 };

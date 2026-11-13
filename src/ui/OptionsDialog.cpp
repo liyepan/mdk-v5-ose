@@ -1,5 +1,7 @@
 #include "ui/OptionsDialog.h"
+#include "core/Formatter.h"
 #include "core/Lang.h"
+#include "core/Settings.h"
 
 #include "ui/KeilStyle.h"
 
@@ -282,6 +284,23 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
 
     form->addRow(Lang::t("Compiler Folder:"), dirRow);
     form->addRow(Lang::t("Family:"), m_family);
+
+    // ---- clang-format（格式化引擎）----
+    auto* clangRow = new QWidget;
+    auto* clangLayout = new QHBoxLayout(clangRow);
+    clangLayout->setContentsMargins(0, 0, 0, 0);
+
+    m_clangFormat = new QLineEdit(Settings::instance().clangFormatPath());
+    m_clangFormat->setPlaceholderText(
+        QStringLiteral("留空则自动探测（PATH / LLVM / VS Code cpptools）"));
+
+    auto* clangBrowse = new QPushButton(Lang::t("Browse..."));
+    auto* clangAuto = new QPushButton(QStringLiteral("自动探测"));
+    clangLayout->addWidget(m_clangFormat, 1);
+    clangLayout->addWidget(clangBrowse);
+    clangLayout->addWidget(clangAuto);
+
+    form->addRow(QStringLiteral("clang-format:"), clangRow);
     layout->addLayout(form);
 
     auto* hint = new QLabel(
@@ -296,10 +315,22 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
     m_status->setWordWrap(true);
     layout->addWidget(m_status);
 
+    m_clangStatus = new QLabel;
+    m_clangStatus->setWordWrap(true);
+    layout->addWidget(m_clangStatus);
+
     auto* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     layout->addWidget(box);
 
     connect(browseButton, &QPushButton::clicked, this, &ToolchainDialog::browse);
+    connect(clangBrowse, &QPushButton::clicked, this, &ToolchainDialog::browseClangFormat);
+    connect(clangAuto, &QPushButton::clicked, this, [this]() {
+        // 把自动探测到的路径直接填进去，方便用户确认到底用了哪一份
+        const QString found = Formatter::detectClangFormat();
+        m_clangFormat->setText(QDir::toNativeSeparators(found));
+    });
+    connect(m_clangFormat, &QLineEdit::textChanged, this,
+            [this](const QString&) { refreshClangStatus(); });
     connect(m_dir, &QLineEdit::textChanged, this, &ToolchainDialog::refreshStatus);
     connect(m_family, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, [this](int) { refreshStatus(); });
@@ -307,7 +338,47 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
     connect(box, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     refreshStatus();
-    resize(520, 300);
+    refreshClangStatus();
+    resize(560, 360);
+}
+
+void ToolchainDialog::browseClangFormat()
+{
+    const QString file = QFileDialog::getOpenFileName(
+        this, QStringLiteral("选择 clang-format"),
+        QFileInfo(m_clangFormat->text()).absolutePath(),
+        QStringLiteral("clang-format (clang-format*);;All Files (*)"));
+    if (!file.isEmpty())
+        m_clangFormat->setText(QDir::toNativeSeparators(file));
+}
+
+void ToolchainDialog::refreshClangStatus()
+{
+    const QString typed = m_clangFormat->text().trimmed();
+
+    QString path;
+    if (!typed.isEmpty()) {
+        if (QFileInfo(typed).isFile())
+            path = typed;
+    } else {
+        path = Formatter::detectClangFormat();
+    }
+
+    if (!path.isEmpty()) {
+        m_clangStatus->setText(QStringLiteral("格式化将使用: %1")
+                                   .arg(QDir::toNativeSeparators(path)));
+        m_clangStatus->setStyleSheet(QStringLiteral("color: #1a7f37;"));
+    } else if (!typed.isEmpty()) {
+        m_clangStatus->setText(QStringLiteral("这个文件不存在: %1").arg(typed));
+        m_clangStatus->setStyleSheet(QStringLiteral("color: #b01a1a;"));
+    } else {
+        m_clangStatus->setText(
+            QStringLiteral("没找到 clang-format（%1）。格式化只能用它，"
+                           "请装 LLVM 或在这里指定路径。")
+                .arg(Formatter::detectClangFormat().isEmpty() ? QStringLiteral("已探测过 PATH / LLVM")
+                                                              : QString()));
+        m_clangStatus->setStyleSheet(QStringLiteral("color: #b01a1a;"));
+    }
 }
 
 void ToolchainDialog::browse()
@@ -340,6 +411,11 @@ void ToolchainDialog::accept()
         m_status->setText(QStringLiteral("请选择一个包含 armcc.exe / armclang.exe 的目录"));
         return;
     }
+
+    // clang-format 路径是应用级设置，直接存掉（这个对话框是唯一能改它的地方）
+    Settings::instance().setClangFormatPath(m_clangFormat->text().trimmed());
+    Settings::instance().sync();
+
     QDialog::accept();
 }
 

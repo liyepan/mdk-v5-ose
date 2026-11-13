@@ -103,11 +103,13 @@
   按住 Ctrl 把鼠标放上去就画一条蓝色下划线；只按 Ctrl 不动鼠标也会立刻出现
 - **右键跳转菜单**：在标识符上右键，函数会给「跳转实现」（.c 里的函数体）和
   「跳转定义」（.h 里的声明）两项；结构体 / 枚举 / 宏这类只在头文件里的，只给「跳转定义」
-- **Ctrl+S 自动格式化**：优先调用 clang-format（和 VS Code C/C++ 插件同一个引擎，
-  自动探测 PATH / LLVM / VS Code cpptools 自带的那份）；
-  找不到就退回内置缩进器——它只改行首空白，绝不会改坏语义
-- Shift+Alt+F 手动格式化，Tools -> Format on Save 可关掉边存边格式化
-- 工程里有 .clang-format 就按你的配置来，没有就用内置兜底风格（4 空格、Allman、不限列宽）
+- **格式化只用 clang-format**（和 VS Code C/C++ 插件同一个引擎）。工程里有 `.clang-format`
+  就按你的配置来，没有就用内置兜底风格（4 空格、Allman、不限列宽）
+- **路径在这里配**：Tools -> Configure Toolchain 里的 `clang-format:` 一行，
+  可以直接填路径、"浏览…"、"自动探测"。留空就自动找 PATH / LLVM / VS Code cpptools 自带的那份
+- 找不到 clang-format 时会明确报错并问你要不要现在去配置，**不会**偷偷用别的引擎顶上
+  （两套引擎风格不一致，会把工程改花）
+- Shift+Alt+F 手动格式化；Ctrl+S 自动格式化（Tools -> Format on Save 可关）
 
 语法配色对齐 VS Code Light+：控制关键字紫、声明关键字蓝、类型青、函数名棕、
 全大写宏紫、数字绿、字符串暗红、注释绿斜体。
