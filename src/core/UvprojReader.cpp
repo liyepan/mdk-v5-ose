@@ -6,9 +6,84 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QSaveFile>
+#include <QTextCodec>
 #include <QTextStream>
 
 namespace {
+
+// 把 DOM 写回文件时，尽量保持原文件的"外观"：
+//   - 原来的 XML 声明（<?xml ... ?>）原样保留
+//   - 空的 <X/> 还原成 uVision 习惯的 <X></X>
+//   - 原来用 CRLF 的还是 CRLF，原来有 BOM 的还写 BOM
+//   - 按声明里的编码写回（GBK 工程不会被写成 UTF-8）
+// 这样 Keil 那边看到的只是"被改了几行"，而不是整个文件被重排。
+bool writeProjectXml(const QString& path, const QDomDocument& doc, const QByteArray& original,
+                     QString* error)
+{
+    // ---- 1. 编码 ----
+    QString encoding = QStringLiteral("UTF-8");
+    static const QRegularExpression encRe(
+        QStringLiteral("encoding\\s*=\\s*[\"']([^\"']+)[\"']"));
+    const QString head = QString::fromLatin1(original.left(200));
+    const QRegularExpressionMatch encMatch = encRe.match(head);
+    if (encMatch.hasMatch())
+        encoding = encMatch.captured(1);
+
+    QTextCodec* codec = QTextCodec::codecForName(encoding.toLatin1());
+    if (!codec)
+        codec = QTextCodec::codecForName("UTF-8");
+
+    // ---- 2. 声明行 ----
+    QString declaration;
+    int start = 0;
+    if (original.startsWith("\xEF\xBB\xBF"))
+        start = 3;
+    if (original.mid(start, 5) == "<?xml") {
+        const int end = original.indexOf("?>", start);
+        if (end > 0)
+            declaration = QString::fromLatin1(original.mid(start, end + 2 - start));
+    }
+
+    // ---- 3. 正文：QDom 的输出会自己带一行声明，去掉换成原来的 ----
+    QString body = doc.toString(2);
+    if (body.startsWith(QLatin1String("<?xml"))) {
+        const int nl = body.indexOf(QLatin1Char('\n'));
+        body = (nl >= 0) ? body.mid(nl + 1) : QString();
+    }
+    body = body.trimmed() + QLatin1Char('\n');
+
+    // 空的 <X/> 还原成 <X></X>
+    static const QRegularExpression selfClose(
+        QStringLiteral("<([A-Za-z_][A-Za-z0-9_.:-]*)\\s*/>"));
+    body.replace(selfClose, QStringLiteral("<\\1></\\1>"));
+
+    QString text = declaration.isEmpty() ? body
+                                         : declaration + QLatin1Char('\n') + body;
+
+    // ---- 4. 换行风格 ----
+    if (original.contains("\r\n"))
+        text.replace(QLatin1String("\n"), QLatin1String("\r\n"));
+
+    // ---- 5. 写盘（保留 BOM；QSaveFile 保证写一半崩了也不会留下半截工程） ----
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        if (error)
+            *error = QStringLiteral("无法写入工程文件: ") + file.errorString();
+        return false;
+    }
+
+    QByteArray bytes = codec->fromUnicode(text);
+    if (original.startsWith("\xEF\xBB\xBF"))
+        bytes.prepend(QByteArray("\xEF\xBB\xBF", 3));
+
+    if (file.write(bytes) != bytes.size() || !file.commit()) {
+        if (error)
+            *error = QStringLiteral("写入工程文件失败: ") + file.errorString();
+        return false;
+    }
+    return true;
+}
 
 QString childText(const QDomElement& parent, const QString& tag, const QString& def = QString())
 {
@@ -342,6 +417,9 @@ bool saveTarget(const QString& path, const Target& target, QString* error)
         return false;
     }
 
+    const QByteArray original = file.readAll();
+    file.seek(0);
+
     QDomDocument doc;
     QString parseError;
     int line = 0;
@@ -406,18 +484,7 @@ bool saveTarget(const QString& path, const Target& target, QString* error)
     setChildText(doc, ldads, QStringLiteral("Misc"), target.linkerMisc);
     setChildFlag(doc, misc, QStringLiteral("useUlib"), target.useMicrolib);
 
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        if (error)
-            *error = QStringLiteral("无法写入工程文件: ") + file.errorString();
-        return false;
-    }
-
-    QTextStream ts(&file);
-    ts.setCodec("UTF-8");
-    ts << doc.toString(2);
-    ts.flush();
-    file.close();
-    return true;
+    return writeProjectXml(path, doc, original, error);
 }
 
 bool saveGroups(const QString& path, const Target& target, QString* error)
@@ -428,6 +495,9 @@ bool saveGroups(const QString& path, const Target& target, QString* error)
             *error = QStringLiteral("无法读取工程文件: ") + file.errorString();
         return false;
     }
+
+    const QByteArray original = file.readAll();
+    file.seek(0);
 
     QDomDocument doc;
     QString parseError;
@@ -509,7 +579,10 @@ bool saveGroups(const QString& path, const Target& target, QString* error)
         for (const ProjFile& pf : group.files) {
             QDomElement fEl = doc.createElement(QStringLiteral("File"));
             appendText(fEl, QStringLiteral("FileName"), pf.name);
-            appendText(fEl, QStringLiteral("FileType"), QString::number(pf.fileType));
+            // 原来没有 <FileType> 的文件（读出来是 0）就别硬塞一个 0 进去，
+            // uVision 对 FileType 为 0 的文件处理方式不明，宁可保持原样
+            if (pf.fileType > 0)
+                appendText(fEl, QStringLiteral("FileType"), QString::number(pf.fileType));
             appendText(fEl, QStringLiteral("FilePath"), pf.path);
 
             const auto oldFile = oldFiles.constFind(pf.path);
@@ -531,18 +604,7 @@ bool saveGroups(const QString& path, const Target& target, QString* error)
         groupsEl.appendChild(gEl);
     }
 
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        if (error)
-            *error = QStringLiteral("无法写入工程文件: ") + file.errorString();
-        return false;
-    }
-
-    QTextStream ts(&file);
-    ts.setCodec("UTF-8");
-    ts << doc.toString(2);
-    ts.flush();
-    file.close();
-    return true;
+    return writeProjectXml(path, doc, original, error);
 }
 
 QString resolvePath(const QString& projectDir, const QString& relative)

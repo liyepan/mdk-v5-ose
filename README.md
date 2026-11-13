@@ -94,7 +94,22 @@
 - **文件编码**：默认 UTF-8。编辑器里右键 -> Encoding 可切 UTF-8 / GBK / GB18030 / Big5 / 系统默认，
   切完自动按新编码重新载入；工程树里右键文件也能「按指定编码打开」；状态栏显示当前文件编码
 
-## 工程管理器
+## 写回 .uvprojx 时保证不破坏 Keil 的构建
+
+改 Target 选项（Options for Target）和工程管理器都会写回 `.uvprojx`，
+做法是**就地改 DOM 再写回**，不是"按模型重新生成一个文件"：
+
+- 只改到我们认识的那些叶子节点，其余内容（`CommonProperty` / `DllOption` /
+  `DebugOption` / `Utilities` / `ArmAdsMisc` 里的大段配置）原样不动
+- `<Groups>` 重建时，已有的分组和文件会把 `GroupOption` / `FileOption`
+  整段克隆过去，你在 Keil 里配的组级/文件级宏和 include 路径不会丢
+- 原来的 XML 声明、编码、BOM、CRLF 换行、`<X></X>` 的写法都保留
+- 写盘用 `QSaveFile`（先写临时文件再原子替换），写一半崩了也不会留下半截工程
+- 文件解析失败 / 写不进去就报错返回，**一个字节都不动**
+- 工程管理器里什么都没改的话直接返回，压根不写文件
+
+唯一的可见差异：QDom 序列化不保留纯空行，重写后会少几行空白行
+（XML 语义无关），其余差异就只有你实际改的那几个值。
 
 工具栏最右边的"工程文件管理"按钮，或者 Project -> Manage Project Items（Alt+M）：
 
