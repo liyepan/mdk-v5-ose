@@ -229,37 +229,72 @@ void folderIcon(QPainter& p, int x, int y, int w, int h)
     px(p, x + 1, y + 5, w - 2, 1, kFolder.lighter(115));
 }
 
-// Keil 的编译图标：一张带点边的白纸，上面压一到两个蓝色向下箭头
-void pageWithArrows(QPainter& p, int arrowCount)
+// 蓝色向下箭头（uVision 里编译/重建都是这个箭头压在点阵框上）
+void blueArrowDown(QPainter& p, int cx, int top)
 {
-    // 纸
-    px(p, 2, 1, 12, 14, kPaperEdge);
-    px(p, 3, 2, 10, 12, kPage);
-    // 四周的小点，模仿 uVision 那种"待编译"的观感
-    for (int x = 3; x < 13; x += 2) {
-        px(p, x, 1, 1, 1, kPaperShade.darker(120));
-        px(p, x, 14, 1, 1, kPaperShade.darker(120));
-    }
-    for (int y = 2; y < 14; y += 2) {
-        px(p, 2, y, 1, 1, kPaperShade.darker(120));
-        px(p, 13, y, 1, 1, kPaperShade.darker(120));
-    }
+    const QColor fill(0x5c, 0x8c, 0xe8);
+    const QColor edge(0x2f, 0x54, 0xa6);
 
-    const QColor c(0x3d, 0x6d, 0xd0);
-    const QColor edge(0x1f, 0x3f, 0x8f);
-    auto arrow = [&](int x, int y) {
-        px(p, x + 2, y, 2, 4, c);
-        px(p, x, y + 4, 6, 1, c);
-        px(p, x + 1, y + 5, 4, 1, c);
-        px(p, x + 2, y + 6, 2, 1, c);
-        px(p, x + 1, y + 4, 1, 1, edge);
+    // 杆：2 宽 3 高
+    px(p, cx - 1, top, 2, 3, fill);
+    px(p, cx - 2, top, 1, 3, edge);
+    // 箭头三角：6 / 4 / 2
+    px(p, cx - 3, top + 3, 6, 1, fill);
+    px(p, cx - 2, top + 4, 4, 1, fill);
+    px(p, cx - 1, top + 5, 2, 1, fill);
+    px(p, cx - 4, top + 3, 1, 1, edge);
+    px(p, cx - 3, top + 4, 1, 1, edge);
+    px(p, cx - 2, top + 5, 1, 1, edge);
+}
+
+// 编译单个文件：虚线椭圆 + 一个向下的箭头
+void translateIcon(QPainter& p)
+{
+    const QColor dash(0x2b, 0x3a, 0x52);
+
+    // 手工点的虚线椭圆（16x16 上正好一圈）
+    static const int ring[][2] = {
+        { 5, 2 }, { 6, 2 }, { 9, 2 }, { 10, 2 },
+        { 2, 4 }, { 3, 4 }, { 12, 4 }, { 13, 4 },
+        { 1, 6 }, { 1, 8 }, { 14, 6 }, { 14, 8 },
+        { 2, 10 }, { 3, 10 }, { 12, 10 }, { 13, 10 },
+        { 5, 12 }, { 6, 12 }, { 9, 12 }, { 10, 12 },
+        { 7, 13 }, { 8, 13 }
     };
+    for (const auto& pt : ring)
+        px(p, pt[0], pt[1], 1, 1, dash);
+
+    blueArrowDown(p, 8, 1);
+}
+
+// 编译整个工程：上面飘点是"待编译的文件"，下面的框是产物
+//   build 一个箭头，rebuild 两个箭头（uVision 就是这么区分的）
+void buildIcon(QPainter& p, int arrowCount)
+{
+    const QColor wall(0x2b, 0x3a, 0x52);
+    const QColor dot(0x6b, 0x7f, 0xa0);
+
+    // 左 / 右 / 底 三面墙，上面敞着（墙细一点，里面才透得出来）
+    px(p, 1, 5, 2, 9, wall);
+    px(p, 13, 5, 2, 9, wall);
+    px(p, 1, 12, 14, 2, wall);
+
+    // 框里的小点（点阵，别太稀）
+    for (int y = 8; y <= 11; y += 2)
+        for (int x = 4; x <= 12; x += 2)
+            px(p, x, y, 1, 1, dot);
+
+    // 上面飘进来的点
+    px(p, 3, 2, 1, 1, wall);
+    px(p, 12, 1, 1, 1, wall);
+    px(p, 10, 3, 1, 1, wall);
+    px(p, 5, 1, 1, 1, wall);
 
     if (arrowCount == 1) {
-        arrow(5, 4);
+        blueArrowDown(p, 8, 3);
     } else {
-        arrow(2, 3);
-        arrow(8, 6);
+        blueArrowDown(p, 5, 3);
+        blueArrowDown(p, 11, 3);
     }
 }
 
@@ -320,11 +355,11 @@ void paintIcon(QPainter& p, const QString& name, int size)
         px(p, 3, 2, 8, 8, kDiskBlue.darker(120));
         diskIcon(p, 4, 4, false);
     } else if (name == QLatin1String("build")) {
-        pageWithArrows(p, 2);
+        buildIcon(p, 1);
     } else if (name == QLatin1String("translate")) {
-        pageWithArrows(p, 1);
+        translateIcon(p);
     } else if (name == QLatin1String("rebuild")) {
-        pageWithArrows(p, 2);
+        buildIcon(p, 2);
     } else if (name == QLatin1String("stop")) {
         p.setPen(QPen(kRed.darker(160), 1));
         p.setBrush(kRed);
