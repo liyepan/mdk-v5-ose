@@ -2,3 +2,6 @@
 
 // 1 = CREATEPROCESS_MANIFEST_RESOURCE_ID
 1 RT_MANIFEST "app.manifest"
+
+// exe 自己的图标：资源管理器、任务栏、快捷方式都取这个
+IDI_ICON1 ICON "app.ico"

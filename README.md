@@ -9,6 +9,15 @@
 > 然后在 Tools -> Configure Toolchain 里指定 armcc.exe / armclang.exe 所在目录。
 > 授权和合规由你与 Arm 的许可协议决定。
 
+## 图标
+
+- `resources/app.ico`：exe 自己的图标（`resources/app.rc` 里 `IDI_ICON1 ICON`），
+  资源管理器 / 任务栏 / 快捷方式都取它；安装包图标也用它（工作流传 `/DICON_FILE`）
+- `resources/icons/app.png`：窗口图标，编译进 qrc（`:/icons/app.png`），
+  `main.cpp` 里 `QApplication::setWindowIcon`
+- `packaging/logo.png`：源图（1254x1254）。改图之后重新生成 .ico / .png 即可，
+  图标里 16/24/32/48/64/128/256 七种尺寸都在，白底已经抠成透明
+
 ## 高 DPI（本轮重点）
 
 - **PerMonitorV2 清单**（resources/app.manifest + app.rc）：Windows 10 1703+ 上每块显示器独立缩放，

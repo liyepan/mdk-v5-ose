@@ -258,7 +258,7 @@ const char* kTemplateXml = R"XML(<?xml version="1.0" encoding="UTF-8" standalone
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    setWindowIcon(KeilStyle::icon(QStringLiteral("target"), 32));
+    // 窗口图标统一由 QApplication::setWindowIcon 给（见 main.cpp）
 
     auto* tabs = new FileTabWidget(this);
     m_tabs = tabs;

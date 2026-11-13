@@ -4,6 +4,7 @@ project(mdk_v5_ose VERSION 0.2.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -65,7 +66,9 @@ if(WIN32)
     set(APP_TYPE WIN32)
 endif()
 
-add_executable(mdk-v5-ose ${APP_TYPE} ${APP_SOURCES} ${APP_HEADERS})
+add_executable(mdk-v5-ose ${APP_TYPE} ${APP_SOURCES} ${APP_HEADERS}
+    resources/resources.qrc)
+
 
 target_include_directories(mdk-v5-ose PRIVATE src)
 

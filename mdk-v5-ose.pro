@@ -54,6 +54,9 @@ HEADERS += \
     src/ui/LoadingOverlay.h \
     src/ui/MainWindow.h
 
+# 应用图标（窗口/任务栏用 png，exe 自己的图标走 app.rc 里的 .ico）
+RESOURCES += resources/resources.qrc
+
 # MSVC 默认按系统 ANSI 代码页读源文件，源码里有中文，必须显式指定 UTF-8
 msvc: QMAKE_CXXFLAGS += /utf-8
 

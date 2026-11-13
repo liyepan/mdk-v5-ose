@@ -141,6 +141,11 @@ int main(int argc, char* argv[])
     app.setApplicationName(QStringLiteral("mdk-v5-ose"));
     app.setApplicationDisplayName(QStringLiteral("uVision5-OSE"));
 
+    // 窗口/任务栏图标（exe 自己的图标走 resources/app.rc）
+    app.setWindowIcon(QIcon(QStringLiteral(":/icons/app.png")));
+    if (Timing::enabled() && app.windowIcon().isNull())
+        std::fprintf(stderr, "[icon] 警告：窗口图标没加载出来（qrc 没编进去？）\n");
+
     Lang::set(Lang::idFromString(Settings::instance().language()));
     startupProbe.mark("QApplication");
 

@@ -114,9 +114,10 @@ jobs:
           script=$(cygpath -w "$PWD/packaging/windows/installer.nsi")
 
           # 有图标就带上；没有也不影响（安装包会用 exe 自带的默认图标）
+          # 安装包图标用和应用同一个 .ico
           icon_arg=""
-          if [ -f "$PWD/packaging/windows/app.ico" ]; then
-            icon_arg="/DICON_FILE=$(cygpath -w "$PWD/packaging/windows/app.ico")"
+          if [ -f "$PWD/resources/app.ico" ]; then
+            icon_arg="/DICON_FILE=$(cygpath -w "$PWD/resources/app.ico")"
           fi
 
           # Git Bash（MSYS）会把 /D... 当成 Unix 路径转换，这里关掉参数转换
