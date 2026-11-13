@@ -24,6 +24,7 @@ struct CliOptions
     QString project;
     QString toolchainDir;
     QString screenshot;
+    int     screenshotDelay = 400;
     int     target = 0;
     int     jobs = 0;      // 0 = 用默认并行度
 };
@@ -45,6 +46,9 @@ CliOptions parseArgs(const QStringList& args)
         } else if (a == QLatin1String("--screenshot")) {
             if (i + 1 < args.size())
                 opt.screenshot = args.at(++i);
+        } else if (a == QLatin1String("--screenshot-delay")) {
+            if (i + 1 < args.size())
+                opt.screenshotDelay = args.at(++i).toInt();
         } else if (a == QLatin1String("--target")) {
             if (i + 1 < args.size())
                 opt.target = args.at(++i).toInt();
@@ -156,7 +160,7 @@ int main(int argc, char* argv[])
 
     if (!opt.screenshot.isEmpty()) {
         const QString path = opt.screenshot;
-        QTimer::singleShot(400, &app, [&window, &app, path]() {
+        QTimer::singleShot(qMax(0, opt.screenshotDelay), &app, [&window, &app, path]() {
             window.grab().save(path);
             app.quit();
         });

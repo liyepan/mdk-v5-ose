@@ -147,6 +147,11 @@ const QHash<QString, QString>& dictionary()
         add("Open uVision Project", QStringLiteral("打开 uVision 工程"));
         add("Open Project", QStringLiteral("打开工程"));
         add("Project '%1' loaded.", QStringLiteral("已加载工程 '%1'。"));
+
+        // ---- 加载遮罩 ----
+        add("Loading...", QStringLiteral("加载中…"));
+        add("Reading project file...", QStringLiteral("正在读取工程文件…"));
+        add("Scanning source files...", QStringLiteral("正在扫描源文件…"));
         add("Open File", QStringLiteral("打开文件"));
         add("Save Changes", QStringLiteral("保存修改"));
         add("%1 has been modified. Save changes?", QStringLiteral("%1 已被修改，是否保存？"));

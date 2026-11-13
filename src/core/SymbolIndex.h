@@ -6,6 +6,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
+
 #include "core/UvprojModel.h"
 
 struct SymbolLocation
@@ -24,8 +26,13 @@ struct SymbolLocation
 class SymbolIndex
 {
 public:
+    // 进度回调：done / total 是已扫描 / 待扫描的文件数，返回 false 表示取消。
+    // 可能在工作线程里被调用，实现方自己保证线程安全。
+    using ProgressFn = std::function<bool(int done, int total)>;
+
     void clear();
-    void build(const UvProject& project, int targetIndex);
+    void build(const UvProject& project, int targetIndex,
+               const ProgressFn& progress = ProgressFn());
 
     bool isBuilt() const { return m_built; }
 

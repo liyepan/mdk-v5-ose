@@ -2,12 +2,14 @@
 #include "core/Lang.h"
 
 #include "core/Formatter.h"
+#include "core/ProjectLoader.h"
 #include "core/Settings.h"
 #include "core/Timing.h"
 #include "core/UvprojReader.h"
 #include "ui/BuildOutput.h"
 #include "ui/CodeEditor.h"
 #include "ui/KeilStyle.h"
+#include "ui/LoadingOverlay.h"
 #include "ui/OptionsDialog.h"
 #include "ui/ProjectTree.h"
 
@@ -36,17 +38,22 @@
 #include <QMenuBar>
 #include <QEvent>
 #include <QMouseEvent>
+#include <QResizeEvent>
+#include <QThread>
 #include <QTimer>
 #include <functional>
 #include <QMessageBox>
 #include <QStatusBar>
+#include <QStringListModel>
 #include <QTabWidget>
 #include <QTextStream>
-#include <QThread>
 #include <QToolBar>
 #include <QToolButton>
 
 namespace {
+
+// 打开工程超过这么久还没好，才把加载遮罩打出来（快的时候别闪一下）
+const int kOverlayDelayMs = 120;
 
 // QTabWidget::setTabBar 是 protected，这里暴露出来
 class FileTabWidget : public QTabWidget
@@ -290,6 +297,8 @@ MainWindow::MainWindow(QWidget* parent)
 
     m_engine->setJobs(Settings::instance().buildJobs());
 
+    ensureOverlay();
+
     reloadToolchain();
     restoreWindowState();
     applyToolBarLayout();     // restoreState 可能把工具栏摆回旧布局，这里纠正
@@ -298,7 +307,16 @@ MainWindow::MainWindow(QWidget* parent)
     setBusy(false);
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+    // 后台还在读工程的话，先让它停下再拆自己，免得回调打到半拆的窗口上
+    if (m_loader)
+        m_loader->cancel();
+    if (m_loadThread) {
+        m_loadThread->wait(3000);
+        m_loadThread = nullptr;
+    }
+}
 
 // ---------------------------------------------------------------- 界面搭建
 
@@ -744,7 +762,8 @@ void MainWindow::createToolBars()
             m_symbolCombo->setInsertPolicy(QComboBox::NoInsert);
             m_symbolCombo->lineEdit()->setPlaceholderText(Lang::t("Symbols"));
             m_symbolCombo->setToolTip(Lang::t("Symbols"));
-            m_symbolCombo->installEventFilter(this);
+            m_symbolModel = new QStringListModel(this);
+            m_symbolCombo->setModel(m_symbolModel);
             connect(m_symbolCombo, QOverload<int>::of(&QComboBox::activated),
                     this, &MainWindow::onSymbolChosen);
             mainBar->addWidget(m_symbolCombo);
@@ -965,30 +984,131 @@ void MainWindow::onOpenProject()
         openProject(path);
 }
 
+// 读工程、建符号表都丢到后台线程，主线程只负责最后铺界面。
+// 慢的话（超过 kOverlayDelayMs）才把遮罩打出来，快的时候不闪一下。
 void MainWindow::openProject(const QString& path)
 {
     Timing::Scope openScope("openProject");
-    Timing::Probe openProbe("openProject");
+    startLoad(path, nullptr, 0);
+}
 
-    UvProject project;
-    QString error;
-    if (!Uvproj::load(path, project, &error)) {
+void MainWindow::startLoad(const QString& path, const UvProject* project, int targetIndex)
+{
+    if (m_loader) {
+        m_statusMessage->setText(Lang::t("Loading..."));
+        return;
+    }
+
+    m_loading = true;
+    m_loadStage = Lang::t("Loading...");
+    m_loadDetail = Lang::t("Reading project file...");
+    setBusy(true);           // 加载期间别让人点到编译
+
+    m_loader = project ? new ProjectLoader(*project, targetIndex, this)
+                       : new ProjectLoader(path, targetIndex, this);
+
+    connect(m_loader, &ProjectLoader::stage, this,
+            [this](const QString& title, const QString& detail) {
+                // 遮罩可能还没打出来（120 ms 之前），先把文字记下来
+                m_loadStage = title;
+                m_loadDetail = detail;
+                if (m_overlay && m_overlay->isRunning())
+                    m_overlay->setStatus(title, detail);
+            });
+    connect(m_loader, &ProjectLoader::progress, this, [this](int done, int total) {
+        if (m_overlay && m_overlay->isRunning())
+            m_overlay->setProgress(done, total);
+    });
+    connect(m_loader, &ProjectLoader::finished, this, &MainWindow::onProjectLoaded);
+
+    m_loadThread = QThread::create([loader = m_loader]() { loader->run(); });
+    connect(m_loadThread, &QThread::finished, m_loadThread, &QObject::deleteLater);
+    m_loadThread->start();
+
+    // 超过这个时间还没读完，才盖遮罩：小工程一眨眼就过去了，不该闪一下
+    QTimer::singleShot(kOverlayDelayMs, this, [this]() {
+        if (!m_loading)
+            return;
+        ensureOverlay();
+        m_overlay->start(this, Lang::t("Loading..."));
+        m_overlay->setStatus(m_loadStage.isEmpty() ? Lang::t("Loading...") : m_loadStage,
+                             m_loadDetail);
+    });
+}
+
+void MainWindow::onProjectLoaded()
+{
+    Timing::Scope loadedScope("onProjectLoaded");
+
+    ProjectLoader* loader = m_loader;
+    if (!loader)
+        return;
+
+    m_loader = nullptr;
+    m_loading = false;
+
+    // 结果成员是在工作线程里写好的，finished 之后读就安全了。
+    // 线程这时候已经把活干完，wait 只是回收一下对象。
+    if (m_loadThread) {
+        m_loadThread->wait(2000);
+        m_loadThread = nullptr;
+    }
+
+    const bool ok = loader->ok;
+    const QString error = loader->error;
+    const UvProject project = loader->project;
+    const SymbolIndex symbols = loader->symbols;
+    const bool reloadOnly = loader->isReloadOnly();
+    loader->deleteLater();
+
+    if (!ok) {
+        finishOverlay();
         QMessageBox::critical(this, Lang::t("Open Project"), error);
         return;
     }
 
-    openProbe.mark("xml parse");
+    m_symbols = symbols;
 
-    m_project = project;
-    m_activeTarget = 0;
+    if (reloadOnly) {
+        // 切 target：工程本身没变，只换了符号表
+        populateSymbolCombo();
+    } else {
+        m_project = project;
+        m_activeTarget = 0;
 
-    Settings::instance().setLastProject(m_project.filePath);
-    Settings::instance().addRecentProject(m_project.filePath);
-    Settings::instance().sync();
+        Settings::instance().setLastProject(m_project.filePath);
+        Settings::instance().addRecentProject(m_project.filePath);
+        Settings::instance().sync();
 
-    openProbe.mark("settings sync");
+        applyProject();
+    }
 
-    applyProject();
+    finishOverlay();
+}
+
+void MainWindow::ensureOverlay()
+{
+    if (m_overlay)
+        return;
+
+    m_overlay = new LoadingOverlay(this);
+    m_overlay->setGeometry(rect());
+    m_overlay->hide();
+}
+
+void MainWindow::finishOverlay()
+{
+    if (m_overlay)
+        m_overlay->finish();
+
+    setBusy(false);          // 加载完立刻能点编译
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+    if (m_overlay)
+        m_overlay->setGeometry(rect());
 }
 
 void MainWindow::applyProject()
@@ -1002,13 +1122,12 @@ void MainWindow::applyProject()
     m_projectTree->setProject(m_project, m_activeTarget);
     applyProbe.mark("project tree");
     m_buildOutput->setProjectDir(m_project.directory());
-    m_symbols.clear();
     m_navHistory.clear();
     m_navIndex = -1;
     populateTargetCombo();
     applyProbe.mark("target combo");
-    invalidateSymbols();     // 符号索引挪到之后空闲时再建
-    applyProbe.mark("symbol index");
+    populateSymbolCombo();   // 符号表已经在后台建好了，这里只填下拉框
+    applyProbe.mark("symbol combo");
 
     updateWindowTitle();
     setBusy(false);
@@ -1019,11 +1138,16 @@ void MainWindow::applyProject()
 
 void MainWindow::onCloseProject()
 {
+    if (m_loading)
+        return;
+
     while (m_tabs->count() > 0)
         onTabCloseRequested(m_tabs->count() - 1);
 
     m_project = UvProject();
-    invalidateSymbols();
+    m_symbols.clear();
+    if (m_symbolCombo)
+        m_symbolCombo->clear();
     m_projectTree->clear();
     m_engine->setProject(m_project, 0);
     m_buildOutput->clear();
@@ -1033,12 +1157,14 @@ void MainWindow::onCloseProject()
 
 void MainWindow::onTargetChanged(int index)
 {
-    if (m_updatingTargets || index < 0)
+    if (m_updatingTargets || index < 0 || m_loading)
         return;
 
     m_updatingTargets = true;
     m_activeTarget = index;
     m_symbols.clear();
+    if (m_symbolModel)   // 下拉框先清空，等新的符号表回来再填
+        m_symbolModel->setStringList(QStringList());
     m_engine->setProject(m_project, m_activeTarget);
 
     // 工程树和工具栏的两个下拉框互相同步
@@ -1047,7 +1173,9 @@ void MainWindow::onTargetChanged(int index)
     if (m_targetCombo && m_targetCombo->currentIndex() != index)
         m_targetCombo->setCurrentIndex(index);
 
-    invalidateSymbols();
+    // 换一套符号表，同样丢后台（文件解析有缓存，一般几十毫秒）
+    startLoad(QString(), &m_project, index);
+
     updateWindowTitle();
     m_updatingTargets = false;
 }
@@ -1420,64 +1548,22 @@ void MainWindow::onFindInFiles()
 
 void MainWindow::populateSymbolCombo()
 {
-    if (!m_symbolCombo)
+    if (!m_symbolCombo || !m_symbolModel)
         return;
 
-    m_symbolCombo->clear();
-    m_symbolComboFilled = false;
-
-    if (!m_project.isValid())
+    if (!m_project.isValid()) {
+        m_symbolModel->setStringList(QStringList());
+        m_symbolCombo->setCurrentIndex(-1);
         return;
+    }
 
     ensureSymbolIndex();
     const QStringList names = m_symbols.names();
 
-    m_symbolCombo->addItems(names);
+    // 几万个符号用 addItems 一个个插会很慢，直接换掉模型是一次性的
+    m_symbolModel->setStringList(names);
     m_symbolCombo->setCurrentIndex(-1);
     m_symbolCombo->setToolTip(QStringLiteral("%1 symbols").arg(names.size()));
-    m_symbolComboFilled = true;
-}
-
-// 打开工程 / 切 target 时只把索引作废，真正的扫描推迟到空闲时再做，
-// 这样打开工程的时间只花在解析 XML 和建工程树上。
-void MainWindow::invalidateSymbols()
-{
-    m_symbols.clear();
-    m_symbolComboFilled = false;
-
-    if (m_symbolCombo)
-        m_symbolCombo->clear();
-
-    QTimer::singleShot(250, this, &MainWindow::warmSymbolIndex);
-}
-
-void MainWindow::warmSymbolIndex()
-{
-    if (!m_project.isValid() || m_symbolComboFilled)
-        return;
-
-    Timing::Scope scope("warmSymbolIndex");
-    populateSymbolCombo();
-}
-
-bool MainWindow::eventFilter(QObject* watched, QEvent* event)
-{
-    // 下拉框在被碰到的第一下才去建索引、填内容
-    if (watched == m_symbolCombo && !m_symbolComboFilled) {
-        switch (event->type()) {
-        case QEvent::MouseButtonPress:
-        case QEvent::MouseButtonDblClick:
-        case QEvent::KeyPress:
-        case QEvent::Wheel:
-        case QEvent::FocusIn:
-            populateSymbolCombo();
-            break;
-        default:
-            break;
-        }
-    }
-
-    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::onSymbolChosen(int index)
@@ -1882,6 +1968,9 @@ void MainWindow::onOptionsForFile(const QString& path)
 
 void MainWindow::onBuild()
 {
+    if (m_loading)   // 工程还在读，别拿旧工程去编
+        return;
+
     if (!m_project.isValid()) {
         QMessageBox::information(this, QStringLiteral("Build"),
                                  QStringLiteral("请先打开一个 .uvprojx 工程。"));
@@ -1899,6 +1988,9 @@ void MainWindow::onBuild()
 
 void MainWindow::onRebuild()
 {
+    if (m_loading)
+        return;
+
     if (!m_project.isValid()) {
         QMessageBox::information(this, Lang::t("Rebuild"),
                                  QStringLiteral("请先打开一个 .uvprojx 工程。"));
@@ -1916,7 +2008,7 @@ void MainWindow::onRebuild()
 
 void MainWindow::onTranslate()
 {
-    if (!m_project.isValid())
+    if (m_loading || !m_project.isValid())
         return;
     if (!ensureToolchain())
         return;
@@ -1937,7 +2029,7 @@ void MainWindow::onTranslate()
 
 void MainWindow::onClean()
 {
-    if (!m_project.isValid())
+    if (m_loading || !m_project.isValid())
         return;
     revealBuildOutput();
     m_buildOutput->clear();

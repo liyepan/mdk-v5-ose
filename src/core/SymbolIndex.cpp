@@ -329,14 +329,15 @@ QString absoluteProjectPath(const QString& projectDir, const QString& raw)
 // 最多扫这么多文件，防止某个工程的 include 路径把整个 SDK 都拖进来
 const int kMaxFiles = 4000;
 
-void buildIndex(QHash<QString, QList<SymbolLocation>>& symbols,
-                QSet<QString>& indexed,
-                const UvProject& project,
-                int targetIndex)
+bool buildIndex(QHash<QString, QList<SymbolLocation>>& symbols,
+                 QSet<QString>& indexed,
+                 const UvProject& project,
+                 int targetIndex,
+                 const SymbolIndex::ProgressFn& progress)
 {
     const Target* target = project.target(targetIndex);
     if (!target)
-        return;
+        return true;
 
     const QString projectDir = project.directory();
 
@@ -367,6 +368,9 @@ void buildIndex(QHash<QString, QList<SymbolLocation>>& symbols,
     IncludeResolver resolver(includeDirs);
 
     for (int cursor = 0; cursor < queue.size() && indexed.size() < kMaxFiles; ++cursor) {
+        if (progress && cursor % 8 == 0 && !progress(cursor, queue.size()))
+            return false;
+
         const QString path = queue.at(cursor);
         if (indexed.contains(path))
             continue;
@@ -390,6 +394,10 @@ void buildIndex(QHash<QString, QList<SymbolLocation>>& symbols,
                 queue << resolved;
         }
     }
+
+    if (progress)
+        progress(queue.size(), queue.size());
+    return true;
 }
 
 } // namespace
@@ -402,10 +410,10 @@ void SymbolIndex::clear()
     m_built = false;
 }
 
-void SymbolIndex::build(const UvProject& project, int targetIndex)
+void SymbolIndex::build(const UvProject& project, int targetIndex, const ProgressFn& progress)
 {
     clear();
-    buildIndex(m_symbols, m_indexed, project, targetIndex);
+    buildIndex(m_symbols, m_indexed, project, targetIndex, progress);
     m_built = true;
 }
 

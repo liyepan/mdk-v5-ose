@@ -28,12 +28,14 @@ set(APP_SOURCES
     src/core/Formatter.cpp
     src/core/Lang.cpp
     src/core/SymbolIndex.cpp
+    src/core/ProjectLoader.cpp
     src/ui/KeilStyle.cpp
     src/ui/CSyntaxHighlighter.cpp
     src/ui/CodeEditor.cpp
     src/ui/ProjectTree.cpp
     src/ui/BuildOutput.cpp
     src/ui/OptionsDialog.cpp
+    src/ui/LoadingOverlay.cpp
     src/ui/MainWindow.cpp
 )
 
@@ -47,6 +49,7 @@ set(APP_HEADERS
     src/core/Formatter.h
     src/core/Lang.h
     src/core/SymbolIndex.h
+    src/core/ProjectLoader.h
     src/core/Timing.h
     src/ui/KeilStyle.h
     src/ui/CSyntaxHighlighter.h
@@ -54,6 +57,7 @@ set(APP_HEADERS
     src/ui/ProjectTree.h
     src/ui/BuildOutput.h
     src/ui/OptionsDialog.h
+    src/ui/LoadingOverlay.h
     src/ui/MainWindow.h
 )
 

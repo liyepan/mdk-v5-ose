@@ -12,11 +12,15 @@ class QAction;
 class QComboBox;
 class QDockWidget;
 class QMenu;
+class QStringListModel;
+class QThread;
 class QToolBar;
 class QLabel;
 class QTabWidget;
 
 class BuildOutput;
+class LoadingOverlay;
+class ProjectLoader;
 class CodeEditor;
 class ProjectTree;
 
@@ -32,7 +36,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
-    bool eventFilter(QObject* watched, QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private slots:
     void onNewFile();
@@ -55,6 +59,7 @@ private slots:
     void onDebugPlaceholder();
 
     void onTargetChanged(int index);
+    void onProjectLoaded();
     void onFileActivated(const QString& path);
     void onTabCloseRequested(int index);
 
@@ -104,9 +109,9 @@ private:
     void createMainToolbarActions();
     void applyToolBarLayout();
     void populateSymbolCombo();
-    void invalidateSymbols();
-    void warmSymbolIndex();
     void populateTargetCombo();
+    void ensureOverlay();
+    void finishOverlay();
     void recordNavigation(const QString& file, int line);
     void createMenus();
     void createToolBars();
@@ -114,6 +119,7 @@ private:
     void createStatusBar();
 
     void applyProject();
+    void startLoad(const QString& path, const UvProject* project, int targetIndex);
     void updateWindowTitle();
     bool ensureToolchain();
     void reloadToolchain();
@@ -156,6 +162,13 @@ private:
     QDockWidget* m_projectDock = nullptr;
     QDockWidget* m_outputDock = nullptr;
 
+    LoadingOverlay* m_overlay = nullptr;
+    ProjectLoader*  m_loader = nullptr;
+    QThread*        m_loadThread = nullptr;
+    bool            m_loading = false;
+    QString         m_loadStage;
+    QString         m_loadDetail;
+
     QLabel* m_statusMessage = nullptr;
     QLabel* m_statusToolchain = nullptr;
     QLabel* m_statusEncoding = nullptr;
@@ -169,9 +182,9 @@ private:
 
     QList<QAction*> m_mainBarActions;   // nullptr = 分隔线
     QList<QToolBar*> m_toolBars;
-    QComboBox*      m_symbolCombo = nullptr;
-    bool            m_symbolComboFilled = false;
-    QComboBox*      m_targetCombo = nullptr;
+    QComboBox*       m_symbolCombo = nullptr;
+    QStringListModel* m_symbolModel = nullptr;
+    QComboBox*       m_targetCombo = nullptr;
     bool            m_updatingTargets = false;
     QAction*        m_symbolComboAnchor = nullptr;
     QList<NavPoint> m_navHistory;
