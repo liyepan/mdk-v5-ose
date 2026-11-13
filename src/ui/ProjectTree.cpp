@@ -161,6 +161,12 @@ void ProjectTree::showContextMenu(const QPoint& pos)
         encodingActions << encodingMenu->addAction(name);
 
     menu.addSeparator();
+    QAction* includeAction = menu.addAction(Lang::t("Include in Build"));
+    includeAction->setCheckable(true);
+    includeAction->setChecked(item ? !item->data(0, kRoleExcluded).toBool() : true);
+    includeAction->setEnabled(kind == 2);
+
+    menu.addSeparator();
     QAction* fileOptions = menu.addAction(Lang::t("Options for File..."));
     QAction* targetOptions = menu.addAction(Lang::t("Options for Target..."));
 
@@ -178,6 +184,9 @@ void ProjectTree::showContextMenu(const QPoint& pos)
     } else if (encodingIndex >= 0 && kind == 2) {
         emit openWithEncodingRequested(item->data(0, kRolePath).toString(),
                                        encodings.at(encodingIndex));
+    } else if (chosen == includeAction && kind == 2) {
+        emit includeInBuildToggled(item->data(0, kRolePath).toString(),
+                                   includeAction->isChecked());
     } else if (chosen == fileOptions && kind == 2) {
         emit optionsForFileRequested(item->data(0, kRolePath).toString());
     } else if (chosen == targetOptions) {

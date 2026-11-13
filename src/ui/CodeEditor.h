@@ -56,6 +56,10 @@ public:
     void commentSelection();
     void uncommentSelection();
     bool findNextText(const QString& text, bool forward = true);
+    // 带选项的查找/替换（查找替换对话框用）
+    bool findNext(const QString& text, bool forward, bool caseSensitive, bool wholeWord);
+    bool replaceOne(const QString& find, const QString& replace, bool caseSensitive, bool wholeWord);
+    int  replaceAll(const QString& find, const QString& replace, bool caseSensitive, bool wholeWord);
 
     // 书签
     void toggleBookmarkAtCursor();

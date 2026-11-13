@@ -21,6 +21,7 @@ class QLabel;
 class QTabWidget;
 
 class BuildOutput;
+class FindReplaceDialog;
 class LoadingOverlay;
 class ProjectLoader;
 class CodeEditor;
@@ -96,6 +97,7 @@ private slots:
     void onFindInFiles();
     void onFindNext();
     void onFind();
+    void onReplace();
     void onSymbolChosen(int index);
     void onBreakpointToggle();
     void onBreakpointDelete();
@@ -164,6 +166,8 @@ private:
     Toolchain   m_toolchain;
     BuildEngine* m_engine = nullptr;
     Flasher*     m_flasher = nullptr;   // 烧写用的外部进程封装
+    QAction*     m_actReplace = nullptr;
+    FindReplaceDialog* m_findDialog = nullptr;   // 非模态的查找替换
     SymbolIndex m_symbols;
     QHash<QString, QColor> m_fileTabColors;
     int         m_tabColorCursor = 0;

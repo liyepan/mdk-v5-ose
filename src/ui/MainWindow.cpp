@@ -10,6 +10,7 @@
 #include "ui/CodeEditor.h"
 #include "ui/KeilStyle.h"
 #include "ui/LoadingOverlay.h"
+#include "ui/FindReplaceDialog.h"
 #include "ui/ManageProjectDialog.h"
 #include "ui/OptionsDialog.h"
 #include "ui/ProjectTree.h"
@@ -296,6 +297,11 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     connect(m_tabs, &QTabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
+    // 双击标签页也能关（和大多数编辑器一样）
+    connect(m_tabs->tabBar(), &QTabBar::tabBarDoubleClicked, this, [this](int index) {
+        if (index >= 0)
+            onTabCloseRequested(index);
+    });
     connect(m_tabs, &QTabWidget::currentChanged, this, [this](int) { updateEncodingLabel(); });
 
     m_engine->setJobs(Settings::instance().buildJobs());
@@ -470,6 +476,8 @@ void MainWindow::createMainToolbarActions()
     m_symbolComboAnchor = add(QStringLiteral("find"), QStringLiteral("Find Next"),
                               QKeySequence(Qt::Key_F3), &MainWindow::onFindNext);
     add(QStringLiteral("search"), QStringLiteral("Find"), QKeySequence::Find, &MainWindow::onFind);
+    m_actReplace = add(QStringLiteral("search"), QStringLiteral("Replace"),
+                       QKeySequence::Replace, &MainWindow::onReplace);
     m_mainBarActions << nullptr;
 
     // 调试
@@ -1562,6 +1570,13 @@ void MainWindow::onUncomment()
 
 void MainWindow::onFindNext()
 {
+    if (m_findDialog && m_findDialog->isVisible() && !m_findDialog->findText().isEmpty()) {
+        if (CodeEditor* editor = currentEditor())
+            editor->findNext(m_findDialog->findText(), true, m_findDialog->caseSensitive(),
+                             m_findDialog->wholeWord());
+        return;
+    }
+
     CodeEditor* editor = currentEditor();
     if (!editor)
         return;
@@ -1579,21 +1594,60 @@ void MainWindow::onFindNext()
         m_statusMessage->setText(QStringLiteral("not found: %1").arg(needle));
 }
 
+// Ctrl+F / Ctrl+H 都打开同一个非模态对话框
 void MainWindow::onFind()
 {
-    CodeEditor* editor = currentEditor();
-    if (!editor)
+    onReplace();
+    if (m_findDialog)
+        m_findDialog->prepare(currentEditor() ? currentEditor()->textCursor().selectedText()
+                                              : QString(),
+                              false);
+}
+
+void MainWindow::onReplace()
+{
+    if (!currentEditor())
         return;
 
-    bool ok = false;
-    const QString needle = QInputDialog::getText(this, Lang::t("Find"),
-                                                 QStringLiteral("Find:"), QLineEdit::Normal,
-                                                 editor->textCursor().selectedText(), &ok);
-    if (!ok || needle.isEmpty())
-        return;
+    if (!m_findDialog) {
+        m_findDialog = new FindReplaceDialog(this);
+        m_findDialog->setWindowFlag(Qt::Tool, true);
 
-    if (!editor->findNextText(needle))
-        m_statusMessage->setText(QStringLiteral("not found: %1").arg(needle));
+        connect(m_findDialog, &FindReplaceDialog::findNextRequested, this,
+                [this](bool forward) {
+                    CodeEditor* editor = currentEditor();
+                    if (!editor || m_findDialog->findText().isEmpty())
+                        return;
+                    if (!editor->findNext(m_findDialog->findText(), forward,
+                                          m_findDialog->caseSensitive(), m_findDialog->wholeWord()))
+                        m_findDialog->setStatus(QStringLiteral("没有找到"));
+                    else
+                        m_findDialog->setStatus(QString());
+                });
+        connect(m_findDialog, &FindReplaceDialog::replaceRequested, this, [this]() {
+            CodeEditor* editor = currentEditor();
+            if (!editor || m_findDialog->findText().isEmpty())
+                return;
+            editor->replaceOne(m_findDialog->findText(), m_findDialog->replaceText(),
+                               m_findDialog->caseSensitive(), m_findDialog->wholeWord());
+        });
+        connect(m_findDialog, &FindReplaceDialog::replaceAllRequested, this, [this]() {
+            CodeEditor* editor = currentEditor();
+            if (!editor || m_findDialog->findText().isEmpty())
+                return;
+            const int count = editor->replaceAll(m_findDialog->findText(),
+                                                 m_findDialog->replaceText(),
+                                                 m_findDialog->caseSensitive(),
+                                                 m_findDialog->wholeWord());
+            m_findDialog->setStatus(QStringLiteral("替换了 %1 处").arg(count));
+        });
+    }
+
+    m_findDialog->prepare(currentEditor() ? currentEditor()->textCursor().selectedText() : QString(),
+                          sender() == m_actReplace);
+    m_findDialog->show();
+    m_findDialog->raise();
+    m_findDialog->activateWindow();
 }
 
 void MainWindow::onFindInFiles()

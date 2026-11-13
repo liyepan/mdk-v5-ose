@@ -28,6 +28,8 @@ signals:
     void optionsForTargetRequested();
     void optionsForFileRequested(const QString& absolutePath);
     void openWithEncodingRequested(const QString& absolutePath, const QString& encoding);
+    // 右键菜单里切换"参与编译"，include=true 表示加回构建
+    void includeInBuildToggled(const QString& absolutePath, bool include);
 
 private:
     void rebuildTree();

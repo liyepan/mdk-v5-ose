@@ -386,7 +386,37 @@ void CodeEditor::uncommentSelection()
     cursor.endEditBlock();
 }
 
+namespace {
+
+bool isWordChar(QChar c)
+{
+    return c.isLetterOrNumber() || c == QLatin1Char('_');
+}
+
+// 命中的位置前后都不是标识符字符，才算"整个单词"
+bool wholeWordAt(QTextDocument* doc, const QTextCursor& cursor)
+{
+    if (cursor.selectionStart() > 0) {
+        const QChar before = doc->characterAt(cursor.selectionStart() - 1);
+        if (isWordChar(before))
+            return false;
+    }
+    if (cursor.selectionEnd() < doc->characterCount() - 1) {
+        const QChar after = doc->characterAt(cursor.selectionEnd());
+        if (isWordChar(after))
+            return false;
+    }
+    return true;
+}
+
+} // namespace
+
 bool CodeEditor::findNextText(const QString& text, bool forward)
+{
+    return findNext(text, forward, false, false);
+}
+
+bool CodeEditor::findNext(const QString& text, bool forward, bool caseSensitive, bool wholeWord)
 {
     if (text.isEmpty())
         return false;
@@ -394,14 +424,39 @@ bool CodeEditor::findNextText(const QString& text, bool forward)
     QTextDocument::FindFlags flags;
     if (!forward)
         flags |= QTextDocument::FindBackward;
+    if (caseSensitive)
+        flags |= QTextDocument::FindCaseSensitively;
 
-    QTextCursor found = document()->find(text, textCursor(), flags);
+    auto searchFrom = [&](const QTextCursor& from) -> QTextCursor {
+        QTextCursor start = from;
+        // 整词匹配时可能要跳过好几个命中，设个上限别死循环
+        for (int guard = 0; guard < 5000; ++guard) {
+            QTextCursor found = document()->find(text, start, flags);
+            if (found.isNull())
+                return QTextCursor();
+            if (!wholeWord || wholeWordAt(document(), found))
+                return found;
+            // 不是整词，从这次命中的下一个字符继续找
+            QTextCursor next = found;
+            if (forward)
+                next.setPosition(qMin(found.selectionEnd() == found.selectionStart()
+                                          ? found.position() + 1
+                                          : found.selectionEnd(),
+                                      document()->characterCount() - 1));
+            else
+                next.setPosition(qMax(0, found.selectionStart() - 1));
+            start = next;
+        }
+        return QTextCursor();
+    };
+
+    QTextCursor found = searchFrom(textCursor());
     if (found.isNull()) {
         // 回绕到文件头/尾再找一次
         QTextCursor from(document());
         if (!forward)
             from.movePosition(QTextCursor::End);
-        found = document()->find(text, from, flags);
+        found = searchFrom(from);
     }
 
     if (found.isNull())
@@ -410,6 +465,58 @@ bool CodeEditor::findNextText(const QString& text, bool forward)
     setTextCursor(found);
     centerCursor();
     return true;
+}
+
+bool CodeEditor::replaceOne(const QString& find, const QString& replace, bool caseSensitive,
+                            bool wholeWord)
+{
+    QTextCursor selection = textCursor();
+    if (selection.hasSelection()) {
+        const QString selected = selection.selectedText();
+        const bool matches = caseSensitive ? (selected == find)
+                                           : (selected.compare(find, Qt::CaseInsensitive) == 0);
+        if (matches && (!wholeWord || wholeWordAt(document(), selection))) {
+            selection.beginEditBlock();
+            selection.insertText(replace);
+            selection.endEditBlock();
+            setTextCursor(selection);
+            return true;
+        }
+    }
+    return findNext(find, true, caseSensitive, wholeWord);
+}
+
+int CodeEditor::replaceAll(const QString& find, const QString& replace, bool caseSensitive,
+                           bool wholeWord)
+{
+    if (find.isEmpty())
+        return 0;
+
+    QTextDocument::FindFlags flags;
+    if (caseSensitive)
+        flags |= QTextDocument::FindCaseSensitively;
+
+    int count = 0;
+    QTextCursor cursor(document());
+    QTextCursor editor(document());
+    editor.beginEditBlock();
+
+    while (true) {
+        QTextCursor found = document()->find(find, cursor, flags);
+        if (found.isNull())
+            break;
+        if (wholeWord && !wholeWordAt(document(), found)) {
+            cursor = found;
+            continue;
+        }
+        found.insertText(replace);
+        cursor = found;
+        ++count;
+        if (count > 100000)      // 保险丝
+            break;
+    }
+    editor.endEditBlock();
+    return count;
 }
 
 // ---------------------------------------------------------------- 书签

@@ -69,6 +69,16 @@ const QHash<QString, QString>& dictionary()
         add("Downloading...", QStringLiteral("正在烧写..."));
         add("Download finished", QStringLiteral("烧写完成"));
         add("Download cancelled", QStringLiteral("烧写已取消"));
+        add("Find / Replace", QStringLiteral("查找 / 替换"));
+        add("Find:", QStringLiteral("查找:"));
+        add("Replace:", QStringLiteral("替换为:"));
+        add("Match case", QStringLiteral("区分大小写"));
+        add("Whole word", QStringLiteral("全字匹配"));
+        add("Find Next", QStringLiteral("查找下一个"));
+        add("Find Previous", QStringLiteral("查找上一个"));
+        add("Replace", QStringLiteral("替换"));
+        add("Replace All", QStringLiteral("全部替换"));
+        add("Include in Build", QStringLiteral("参与编译"));
         add("Insert Breakpoint", QStringLiteral("插入断点"));
         add("Delete Breakpoint", QStringLiteral("删除断点"));
         add("Delete All Breakpoints (Target)", QStringLiteral("清空当前 Target 的断点"));

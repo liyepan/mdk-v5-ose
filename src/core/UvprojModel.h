@@ -23,7 +23,8 @@ struct ProjFile
     QString path;        // 相对 .uvprojx 所在目录（通常形如 .\Source\main.c）
     QString groupName;
     int     fileType = 0;
-    bool    excluded = false;
+    bool    excluded = false;        // 有效状态（组被排除时文件也算排除）
+    bool    includeInBuild = true;   // 文件自己的 IncludeInBuild
     bool    alwaysBuild = false;
 
     // 文件级覆盖选项（FileOption/FileArmAds/Cads/VariousControls）

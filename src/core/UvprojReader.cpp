@@ -377,6 +377,7 @@ bool load(const QString& path, UvProject& out, QString* error)
                 const QDomElement fOption = fEl.firstChildElement(QStringLiteral("FileOption"));
                 const QDomElement fCommon = fOption.firstChildElement(QStringLiteral("CommonProperty"));
                 const bool fileInBuild = childFlag(fCommon, QStringLiteral("IncludeInBuild"), true);
+                f.includeInBuild = fileInBuild;
                 f.excluded = !groupInBuild || !fileInBuild;
 
                 const QDomElement fAds = fOption.firstChildElement(QStringLiteral("FileArmAds"));
@@ -671,6 +672,38 @@ bool saveGroups(const QString& path, const Target& target, QString* error)
                         || tag == QLatin1String("FilePath"))
                         continue;
                     fEl.appendChild(node.cloneNode(true));
+                }
+            }
+
+            // IncludeInBuild：只有"排除"或者原来就写过这个节点时才动，
+            // 没排除过的文件保持原样（不出现在文件里 = 参与编译）
+            {
+                QDomElement fOption = fEl.firstChildElement(QStringLiteral("FileOption"));
+                QDomElement common;
+                QDomElement includeEl;
+                if (!fOption.isNull())
+                    common = fOption.firstChildElement(QStringLiteral("CommonProperty"));
+                if (!common.isNull())
+                    includeEl = common.firstChildElement(QStringLiteral("IncludeInBuild"));
+
+                if (!pf.includeInBuild || !includeEl.isNull()) {
+                    if (fOption.isNull()) {
+                        fOption = doc.createElement(QStringLiteral("FileOption"));
+                        fEl.appendChild(fOption);
+                    }
+                    if (common.isNull()) {
+                        common = doc.createElement(QStringLiteral("CommonProperty"));
+                        fOption.insertBefore(common, fOption.firstChild());
+                    }
+                    if (includeEl.isNull()) {
+                        includeEl = doc.createElement(QStringLiteral("IncludeInBuild"));
+                        common.insertBefore(includeEl, common.firstChild());
+                    }
+                    while (!includeEl.firstChild().isNull())
+                        includeEl.removeChild(includeEl.firstChild());
+                    includeEl.appendChild(
+                        doc.createTextNode(pf.includeInBuild ? QStringLiteral("1")
+                                                             : QStringLiteral("0")));
                 }
             }
 
