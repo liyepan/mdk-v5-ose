@@ -1,0 +1,4 @@
+#include <windows.h>
+
+// 1 = CREATEPROCESS_MANIFEST_RESOURCE_ID
+1 RT_MANIFEST "app.manifest"

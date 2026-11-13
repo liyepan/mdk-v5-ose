@@ -1,12 +1,13 @@
-; uVision5-OSE 安装包脚本（NSIS 3.x / Unicode）
+﻿; uVision5-OSE 安装包脚本（NSIS 3.x / Unicode）
 ;
 ; CI 会传进来：
-;   /DAPP_VERSION   版本号，例如 0.3.0
-;   /DDEPLOY_DIR    dotnet publish 的输出目录（exe + 运行库 + Avalonia 依赖）
+;   /DAPP_VERSION   版本号，例如 0.2.0
+;   /DDEPLOY_DIR    windeployqt 之后的目录（可执行文件 + Qt 运行库 + plugins）
 ;   /DOUTPUT_FILE   输出 exe 的完整路径
 ;   /DICON_FILE     可选，安装包图标
+;   /DARCH_SUFFIX   可选，arm64 时用来区分说明文字
 ;
-; 本地手动打：makensis /DAPP_VERSION=0.3.0 /DDEPLOY_DIR=deploy installer.nsi
+; 本地手动打：makensis /DAPP_VERSION=0.2.0 /DDEPLOY_DIR=deploy installer.nsi
 
 Unicode true
 
@@ -17,7 +18,7 @@ Unicode true
   !define APP_VERSION "0.0.0"
 !endif
 !ifndef DEPLOY_DIR
-  !error "DEPLOY_DIR 未定义（用 /DDEPLOY_DIR=... 指定 dotnet publish 的输出目录）"
+  !error "DEPLOY_DIR 未定义（用 /DDEPLOY_DIR=... 指定 windeployqt 的输出目录）"
 !endif
 !ifndef OUTPUT_FILE
   !define OUTPUT_FILE "uVision5-OSE-${APP_VERSION}-win64-setup.exe"
@@ -27,7 +28,7 @@ Unicode true
 !endif
 
 !define APP_NAME      "uVision5-OSE"
-!define APP_EXE       "uvision5-ose.exe"
+!define APP_EXE       "mdk-v5-ose.exe"
 !define APP_PUBLISHER "linuxacme"
 !define APP_REGKEY    "Software\uVision5OSE"
 !define APP_PROGID    "uVision5OSE.uvprojx"
@@ -98,6 +99,7 @@ SectionEnd
 
 Section "Uninstall"
   SetRegView 64
+  ; 先删文件，再删目录（Qt 的 plugins 子目录也要一起清）
   RMDir /r "$INSTDIR"
 
   Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"

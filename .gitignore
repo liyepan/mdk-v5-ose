@@ -1,8 +1,38 @@
-bin/
-obj/
+# build trees
+build/
+build-*/
+dist/
+deploy/
+out/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
 
-# 配置目录万一落到当前目录（HOME 为空的环境）
-linuxacme/
-.vs/
+# qt / ide
 *.user
-*.suo
+*.pro.user
+*.autosave
+.vs/
+.vscode/
+*.qmake.stash
+
+# object / binary artifacts
+*.o
+*.obj
+*.axf
+*.hex
+*.bin
+*.map
+*.lst
+*.crf
+*.d
+*.dep
+*.lnp
+*.htm
+*.build_log.htm
+
+# os noise
+.DS_Store
+Thumbs.db
