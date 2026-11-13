@@ -1,38 +1,5 @@
-# build trees
-build/
-build-*/
-dist/
-deploy/
-out/
-cmake-build-*/
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-
-# qt / ide
-*.user
-*.pro.user
-*.autosave
+bin/
+obj/
 .vs/
-.vscode/
-*.qmake.stash
-
-# object / binary artifacts
-*.o
-*.obj
-*.axf
-*.hex
-*.bin
-*.map
-*.lst
-*.crf
-*.d
-*.dep
-*.lnp
-*.htm
-*.build_log.htm
-
-# os noise
-.DS_Store
-Thumbs.db
+*.user
+*.suo

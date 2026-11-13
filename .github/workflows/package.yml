@@ -1,12 +1,10 @@
-name: 安装包
+name: 打包
 
-# 本项目目标平台只有 Windows，所以这里只出 Windows 安装包：
-#   x86_64  NSIS 安装包 + 便携 zip
-#   arm64   NSIS 安装包（默认关闭，见 windows-arm64 的说明）
-#
-# Gitea 也会读 .github/workflows，所以每个 job 都有
+# 目标平台只有 Windows：这里出 win-x64 自包含包（用户不用另装 .NET 运行时）。
+# Gitea 也会读 .github/workflows，每个 job 都带
 #   if: github.server_url == 'https://github.com'
-# 守卫，在 Gitea 上只会显示 skipped，不占 runner。
+# 守卫，在 Gitea 上只显示 skipped，不占 runner。
+# 工作流只读写 GitHub：不往 Gitea 推分支 / tag / Release。
 on:
   push:
     branches: [main, master]
@@ -18,77 +16,49 @@ permissions:
   contents: write
 
 concurrency:
-  group: windows-packages-${{ github.ref }}
+  group: packages-${{ github.ref }}
   cancel-in-progress: false
 
 env:
-  QT_VERSION: "5.15.2"
   APP_NAME: "uVision5-OSE"
+  DOTNET_VERSION: "10.0.x"
 
 jobs:
   windows-x86_64:
     name: Windows x86_64
     if: ${{ github.server_url == 'https://github.com' }}
     runs-on: windows-2022
-    timeout-minutes: 40
+    timeout-minutes: 30
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 准备 MSVC 环境
-        uses: ilammy/msvc-dev-cmd@v1
+      - name: 装 .NET SDK
+        uses: actions/setup-dotnet@v4
         with:
-          arch: x64
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: 安装 Qt 5.15.2
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          arch: win64_msvc2019_64
-          cache: true
-
-      - name: 编译并收集 Qt 依赖
+      - name: 读版本号（csproj 里的 <Version>）
         shell: bash
         run: |
           set -euo pipefail
-          version=$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*//p' mdk-v5-ose.pro | head -n1 | tr -d '[:space:]')
+          version=$(dotnet msbuild src/UvisionOse.csproj -getProperty:Version -nologo | tr -d '[:space:]')
           if [ -z "$version" ]; then
-            echo "mdk-v5-ose.pro 里没有 VERSION" >&2
+            echo "csproj 里读不到 <Version>" >&2
             exit 1
           fi
           echo "APP_VERSION=$version" >> "$GITHUB_ENV"
+          echo "版本: $version"
 
-          mkdir -p build
-          cd build
-          # Git Bash 的 /usr/bin 里也有个 link.exe（coreutils 的硬链接工具），
-          # 必须把 MSVC 的 bin 放到 PATH 最前面，nmake 才会用真正的 link.exe
-          cl_path=$(command -v cl.exe || command -v cl || true)
-          if [ -z "$cl_path" ]; then
-            echo "PATH 里找不到 cl.exe" >&2
-            exit 1
-          fi
-          msvc_bin=$(dirname "$cl_path")
-          export PATH="$msvc_bin:$PATH"
-          echo "cl: $(command -v cl)"
-          echo "link: $(command -v link)"
-
-          qmake ../mdk-v5-ose.pro CONFIG+=release
-          nmake release || nmake
-          if [ -f release/mdk-v5-ose.exe ]; then
-            exe=release/mdk-v5-ose.exe
-          else
-            exe=$(find . -name mdk-v5-ose.exe | head -n1)
-          fi
-          if [ -z "$exe" ]; then
-            echo "没找到 mdk-v5-ose.exe" >&2
-            exit 1
-          fi
-          mkdir -p ../deploy
-          cp "$exe" ../deploy/mdk-v5-ose.exe
-          cd ..
-
-          windeployqt --release --no-translations --compiler-runtime deploy/mdk-v5-ose.exe
-          find deploy -maxdepth 1 -type f | sort
+      - name: 发布 win-x64 自包含包
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish src/UvisionOse.csproj \
+            -c Release -r win-x64 --self-contained true \
+            -p:PublishReadyToRun=true -p:DebugType=none \
+            -o deploy
+          ls -la deploy | head -25
 
       - name: 打 NSIS 安装包（关联 .uvprojx）
         shell: bash
@@ -109,17 +79,16 @@ jobs:
             exit 1
           fi
 
-          output=$(cygpath -w "$PWD/dist/${{ env.APP_NAME }}-$APP_VERSION-win64-setup.exe")
+          output=$(cygpath -w "$PWD/dist/uVision5-OSE-$APP_VERSION-win64-setup.exe")
           deploy=$(cygpath -w "$PWD/deploy")
           script=$(cygpath -w "$PWD/packaging/windows/installer.nsi")
 
-          # 有图标就带上；没有也不影响（安装包会用 exe 自带的默认图标）
           icon_arg=""
           if [ -f "$PWD/packaging/windows/app.ico" ]; then
             icon_arg="/DICON_FILE=$(cygpath -w "$PWD/packaging/windows/app.ico")"
           fi
 
-          # Git Bash（MSYS）会把 /D... 当成 Unix 路径转换，这里关掉参数转换
+          # Git Bash（MSYS）会把 /D... 当成 Unix 路径转换，关掉参数转换
           MSYS2_ARG_CONV_EXCL='*' "$makensis" \
             "/DAPP_VERSION=$APP_VERSION" \
             "/DDEPLOY_DIR=$deploy" \
@@ -132,7 +101,7 @@ jobs:
       - name: 便携版 zip
         shell: pwsh
         run: |
-          Compress-Archive -Path deploy/* -DestinationPath "dist/${env:APP_NAME}-${env:APP_VERSION}-win64-portable.zip"
+          Compress-Archive -Path deploy/* -DestinationPath "dist/uVision5-OSE-${{ env.APP_VERSION }}-win64-portable.zip"
           Get-ChildItem dist | Select-Object Name, Length
 
       - name: 上传产物
@@ -161,12 +130,11 @@ jobs:
       - name: 读取版本号
         id: meta
         run: |
-          version=$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*//p' mdk-v5-ose.pro | head -n1 | tr -d '[:space:]')
+          version=$(grep -oP '(?<=<Version>)[^<]+' src/UvisionOse.csproj | head -n1)
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # 只动 GitHub 自己：把这次 Release 要用的 tag 在本仓库里补齐。
-      # Gitea 那边一根手指都不碰 —— 镜像会不会 prune 掉 tag 是 Gitea 侧的事，
-      # 这里只保证 GitHub 上的 Release 每次构建都能拿到自己的 tag。
+      # Gitea 那边一根手指都不碰。
       - name: 确保 tag 存在于 GitHub
         env:
           TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.meta.outputs.version) }}

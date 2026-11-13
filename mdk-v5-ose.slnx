@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/UvisionOse.csproj" />
+  </Folder>
+</Solution>

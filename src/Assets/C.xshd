@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- C 语法配色，对齐 VS Code Light+ -->
+<SyntaxDefinition name="C" extensions=".c;.h;.cpp;.hpp;.cc"
+                  xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+
+  <Color name="Comment"    foreground="#008000" fontStyle="italic" />
+  <Color name="String"     foreground="#A31515" />
+  <Color name="Char"       foreground="#A31515" />
+  <Color name="Number"     foreground="#098658" />
+  <Color name="Preprocessor" foreground="#808080" />
+  <Color name="Control"    foreground="#AF00DB" />
+  <Color name="Type"       foreground="#267F99" />
+  <Color name="Modifier"   foreground="#0000FF" />
+  <Color name="Macro"      foreground="#AF00DB" />
+  <Color name="Function"   foreground="#795E26" />
+
+  <RuleSet ignoreCase="false">
+
+    <Span color="Preprocessor" begin="^\s*#" />
+    <Span color="Comment" begin="//" />
+    <Span color="Comment" multiline="true" begin="/\*" end="\*/" />
+    <Span color="String" begin="&quot;" end="&quot;" multiline="true" />
+    <Span color="Char" begin="'" end="'" />
+
+    <Rule color="Macro">\b[A-Z_][A-Z0-9_]{2,}\b</Rule>
+    <Rule color="Function">\b[A-Za-z_][A-Za-z0-9_]*(?=\s*\()</Rule>
+
+    <Keywords color="Control">
+      <Word>if</Word><Word>else</Word><Word>for</Word><Word>while</Word>
+      <Word>do</Word><Word>switch</Word><Word>case</Word><Word>default</Word>
+      <Word>break</Word><Word>continue</Word><Word>return</Word><Word>goto</Word>
+      <Word>sizeof</Word>
+    </Keywords>
+
+    <Keywords color="Modifier">
+      <Word>static</Word><Word>extern</Word><Word>inline</Word><Word>const</Word>
+      <Word>volatile</Word><Word>register</Word><Word>restrict</Word><Word>typedef</Word>
+      <Word>unsigned</Word><Word>signed</Word><Word>__INLINE</Word><Word>__STATIC_INLINE</Word>
+      <Word>__weak</Word><Word>__packed</Word>
+    </Keywords>
+
+    <Keywords color="Type">
+      <Word>void</Word><Word>char</Word><Word>short</Word><Word>int</Word><Word>long</Word>
+      <Word>float</Word><Word>double</Word><Word>struct</Word><Word>union</Word>
+      <Word>enum</Word><Word>uint8_t</Word><Word>uint16_t</Word><Word>uint32_t</Word>
+      <Word>uint64_t</Word><Word>int8_t</Word><Word>int16_t</Word><Word>int32_t</Word>
+      <Word>int64_t</Word><Word>bool</Word><Word>size_t</Word>
+    </Keywords>
+
+    <Rule color="Number">
+      \b(0[xX][0-9a-fA-F]+|[0-9]+)([uUlLfF]*)\b
+    </Rule>
+
+  </RuleSet>
+</SyntaxDefinition>

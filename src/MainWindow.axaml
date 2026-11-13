@@ -1,0 +1,117 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="UvisionOse.MainWindow"
+        Title="uVision5-OSE"
+        Width="1240" Height="800"
+        MinWidth="900" MinHeight="600"
+        FontFamily="Inter, Microsoft YaHei, WenQuanYi Micro Hei, Noto Sans CJK SC, sans-serif"
+        FontSize="12"
+        Background="#F3F4F6">
+
+  <Window.Styles>
+    <StyleInclude Source="avares://uvision5-ose/Themes/AppStyles.axaml" />
+  </Window.Styles>
+
+  <Panel>
+    <!-- 主内容：加载时整块做模糊，遮罩盖在上面 -->
+    <DockPanel x:Name="ContentRoot">
+      <Menu DockPanel.Dock="Top" Classes="mainmenu">
+        <MenuItem Header="文件(_F)">
+          <MenuItem Header="新建工程..." IsEnabled="False" />
+          <MenuItem Header="打开工程..." Click="OnOpenProjectClick" />
+          <Separator />
+          <MenuItem Header="关闭工程" Click="OnCloseProjectClick" />
+          <Separator />
+          <MenuItem Header="退出" Click="OnExitClick" />
+        </MenuItem>
+        <MenuItem Header="编辑(_E)">
+          <MenuItem Header="撤销" IsEnabled="False" />
+          <MenuItem Header="重做" IsEnabled="False" />
+        </MenuItem>
+        <MenuItem Header="视图(_V)" />
+        <MenuItem Header="工程(_P)">
+          <MenuItem Header="编译 F7" />
+          <MenuItem Header="重新编译" />
+          <MenuItem Header="清理" />
+          <Separator />
+          <MenuItem Header="Options for Target..." IsEnabled="False" />
+        </MenuItem>
+        <MenuItem Header="烧写(_L)" />
+        <MenuItem Header="调试(_D)" />
+        <MenuItem Header="工具(_T)" />
+        <MenuItem Header="帮助(_H)" />
+      </Menu>
+
+      <Border DockPanel.Dock="Top" Classes="toolbar">
+        <StackPanel Orientation="Horizontal" Spacing="2">
+          <Button Classes="tool" Content="新建" />
+          <Button Classes="tool" Content="打开" Click="OnOpenProjectClick" />
+          <Button Classes="tool" Content="保存" />
+          <Border Classes="sep" />
+          <Button Classes="tool accent" Content="编译" Click="OnBuildClick" />
+          <Button Classes="tool" Content="重新编译" />
+          <Button Classes="tool" Content="清理" />
+          <Border Classes="sep" />
+          <Button Classes="tool" Content="下载" />
+          <Border Classes="sep" />
+          <TextBlock Text="Target:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="#5B6270" />
+          <ComboBox x:Name="TargetCombo" Width="120" Height="22" />
+          <TextBlock Text="符号:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="#5B6270" />
+          <ComboBox x:Name="SymbolCombo" Width="170" Height="22" IsEditable="True" />
+        </StackPanel>
+      </Border>
+
+      <Border DockPanel.Dock="Bottom" Classes="statusbar">
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBlock x:Name="StatusMessage" Grid.Column="0" Text="就绪" VerticalAlignment="Center" />
+          <TextBlock x:Name="StatusToolchain" Grid.Column="1" Margin="12,0" Foreground="#5B6270" VerticalAlignment="Center" />
+          <TextBlock x:Name="StatusPosition" Grid.Column="2" Foreground="#5B6270" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+
+      <Grid ColumnDefinitions="260,4,*">
+        <Border Grid.Column="0" Classes="pane">
+          <TreeView x:Name="ProjectTree" Background="Transparent" SelectionChanged="OnTreeSelectionChanged" />
+        </Border>
+        <GridSplitter Grid.Column="1" Background="#E1E4E8" ResizeDirection="Columns" />
+        <Grid Grid.Column="2" RowDefinitions="*,4,190">
+          <TabControl x:Name="EditorTabs" Grid.Row="0" Classes="editors" />
+          <GridSplitter Grid.Row="1" Background="#E1E4E8" ResizeDirection="Rows" />
+          <TabControl x:Name="OutputTabs" Grid.Row="2" Classes="output">
+            <TabItem Header="Build Output">
+              <TextBox x:Name="BuildOutputText" AcceptsReturn="True" IsReadOnly="True"
+                       FontFamily="Consolas, DejaVu Sans Mono, monospace" FontSize="11"
+                       BorderThickness="0" Background="Transparent" TextWrapping="NoWrap" />
+            </TabItem>
+            <TabItem Header="Error List" />
+          </TabControl>
+        </Grid>
+      </Grid>
+    </DockPanel>
+
+    <!-- 加载遮罩：模糊背景 + 圆角卡片 + 蓝色进度条 -->
+    <Border x:Name="LoadingLayer" IsVisible="False" Background="#BFFFFFFF">
+      <Border x:Name="LoadingCard" Width="460" Height="150"
+              HorizontalAlignment="Center" VerticalAlignment="Center"
+              CornerRadius="12" Background="#FFFFFF" BorderBrush="#C9CED6" BorderThickness="1">
+        <Border.Effect>
+          <DropShadowEffect BlurRadius="28" OffsetX="0" OffsetY="6" Color="#2A0F172A" />
+        </Border.Effect>
+        <StackPanel Margin="26,26,26,22" Spacing="6">
+          <TextBlock x:Name="LoadingTitle" Text="加载中…" FontSize="15" FontWeight="SemiBold" Foreground="#1F2328" />
+          <TextBlock x:Name="LoadingDetail" Text="正在读取工程文件…" FontSize="11" Foreground="#6B7280" />
+          <Border x:Name="LoadingBarTrack" Height="8" CornerRadius="4" Background="#E3E7EC" Margin="0,22,0,0" ClipToBounds="True">
+            <Border x:Name="LoadingBarFill" HorizontalAlignment="Left" Width="140" CornerRadius="4">
+              <Border.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                  <GradientStop Color="#2F7FE8" Offset="0" />
+                  <GradientStop Color="#63A6F7" Offset="1" />
+                </LinearGradientBrush>
+              </Border.Background>
+            </Border>
+          </Border>
+        </StackPanel>
+      </Border>
+    </Border>
+  </Panel>
+</Window>
