@@ -490,10 +490,13 @@ void CodeEditor::updateHoverSelection(const QTextCursor& cursor, bool ctrlHeld)
 
     m_hoverCursor = hover;
 
+    // 注意：收的时候必须显式设回 I 型光标。
+    // unsetCursor() 只是"不再用自定义光标"，viewport 会退回默认箭头，
+    // 于是 Ctrl 悬停过一次之后，编辑器里就再也看不到文本光标了。
     if (m_hoverCursor.hasSelection())
         viewport()->setCursor(Qt::PointingHandCursor);
     else
-        viewport()->unsetCursor();
+        viewport()->setCursor(Qt::IBeamCursor);
 
     highlightCurrentLine();      // 里面会把 hover 下划线一起重建
 }

@@ -1869,7 +1869,9 @@ void MainWindow::onWordActivated(const QString& word, const QString& fromFile)
 
     const QList<SymbolLocation> hits = m_symbols.lookup(word);
     if (hits.isEmpty()) {
-        m_statusMessage->setText(QStringLiteral("找不到符号: %1").arg(word));
+        // 说清楚是"索引里没有"，而不是"没这个功能"
+        m_statusMessage->setText(
+            QStringLiteral("符号表里没有 \"%1\"（可能是没被索引到的头文件里的东西）").arg(word));
         return;
     }
 

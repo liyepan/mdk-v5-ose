@@ -3,10 +3,12 @@
 #include "core/Settings.h"
 
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QTemporaryFile>
 
 namespace {
 
@@ -16,6 +18,26 @@ const char* kFallbackStyle =
     "BreakBeforeBraces: Allman, ColumnLimit: 0, "
     "AllowShortFunctionsOnASingleLine: None, SortIncludes: false, "
     "IndentCaseLabels: false, SpaceAfterCStyleCast: false}";
+
+// 从文件所在目录往上找 .clang-format / _clang-format
+QString findStyleFile(const QString& filePath)
+{
+    if (filePath.isEmpty())
+        return QString();
+
+    QDir dir = QFileInfo(filePath).absoluteDir();
+    while (true) {
+        for (const QString& name : {QStringLiteral(".clang-format"),
+                                    QStringLiteral("_clang-format")}) {
+            const QString candidate = dir.absoluteFilePath(name);
+            if (QFileInfo(candidate).isFile())
+                return candidate;
+        }
+        if (!dir.cdUp())
+            break;
+    }
+    return QString();
+}
 
 } // namespace
 
@@ -67,13 +89,29 @@ Formatter::Result Formatter::runClangFormat(const QString& clang, const QString&
     Result r;
     r.engine = QStringLiteral("clang-format");
 
+    // 输入走临时文件：直接往 stdin 写的话，大文件会和 stdout 互相等
+    // （管道写满就死锁），之前就是这样超时的，只是那会儿有内置缩进器兜着才没暴露。
+    QTemporaryFile temp(QDir::tempPath() + QStringLiteral("/mdk-ose-XXXXXX.c"));
+    if (!temp.open()) {
+        r.error = QStringLiteral("创建临时文件失败");
+        return r;
+    }
+    temp.write(input.toUtf8());
+    temp.flush();
+    const QString tempPath = temp.fileName();
+
+    // 工程里有 .clang-format 就按它的来，没有才用内置兜底风格
+    const QString styleArg = findStyleFile(filePath).isEmpty()
+                                 ? QStringLiteral("-style=") + QLatin1String(kFallbackStyle)
+                                 : QStringLiteral("-style=file");
+
     QProcess proc;
     proc.setProgram(clang);
     proc.setArguments({
-        QStringLiteral("-style=file"),
-        QStringLiteral("-fallback-style=") + QLatin1String(kFallbackStyle),
+        styleArg,
         QStringLiteral("-assume-filename=")
             + QDir::toNativeSeparators(QFileInfo(filePath).absoluteFilePath()),
+        QDir::toNativeSeparators(tempPath),
     });
 
     proc.start();
@@ -82,14 +120,20 @@ Formatter::Result Formatter::runClangFormat(const QString& clang, const QString&
         return r;
     }
 
-    proc.write(input.toUtf8());
-    proc.closeWriteChannel();
-
-    if (!proc.waitForFinished(15000)) {
-        proc.kill();
-        r.error = QStringLiteral("clang-format 超时");
-        return r;
+    // 一边等一边把 stdout 收走，避免子进程写满缓冲区阻塞
+    QByteArray output;
+    QElapsedTimer timer;
+    timer.start();
+    while (!proc.waitForFinished(50)) {
+        output += proc.readAllStandardOutput();
+        if (timer.elapsed() > 15000) {
+            proc.kill();
+            proc.waitForFinished(1000);
+            r.error = QStringLiteral("clang-format 超时");
+            return r;
+        }
     }
+    output += proc.readAllStandardOutput();
 
     if (proc.exitCode() != 0) {
         r.error = QString::fromLocal8Bit(proc.readAllStandardError()).trimmed();
@@ -98,7 +142,7 @@ Formatter::Result Formatter::runClangFormat(const QString& clang, const QString&
         return r;
     }
 
-    r.text = QString::fromUtf8(proc.readAllStandardOutput());
+    r.text = QString::fromUtf8(output);
     r.ok = true;
     return r;
 }
