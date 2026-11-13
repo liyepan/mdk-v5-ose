@@ -223,6 +223,9 @@ const QHash<QString, QString>& dictionary()
         // ---- 编码 ----
         add("Encoding", QStringLiteral("编码"));
         add("Reload with Encoding", QStringLiteral("按此编码重新载入"));
+        add("Go to Definition", QStringLiteral("跳转定义"));
+        add("Go to Implementation", QStringLiteral("跳转实现"));
+        add("Select All", QStringLiteral("全选"));
         add("System Default", QStringLiteral("系统默认"));
         add("Save as UTF-8", QStringLiteral("另存为 UTF-8"));
 

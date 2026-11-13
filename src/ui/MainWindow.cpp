@@ -1841,10 +1841,10 @@ QList<JumpTarget> MainWindow::jumpTargetsFor(const QString& word)
                                || suffix == QLatin1String("cc") || suffix == QLatin1String("cxx"));
 
         if (isSource && !hasImpl) {
-            implTarget = JumpTarget{QStringLiteral("跳转实现"), loc.file, loc.line};
+            implTarget = JumpTarget{QStringLiteral("Go to Implementation"), loc.file, loc.line};
             hasImpl = true;
         } else if (isHeader && !hasDecl) {
-            declTarget = JumpTarget{QStringLiteral("跳转定义"), loc.file, loc.line};
+            declTarget = JumpTarget{QStringLiteral("Go to Definition"), loc.file, loc.line};
             hasDecl = true;
         }
     }
@@ -1853,7 +1853,8 @@ QList<JumpTarget> MainWindow::jumpTargetsFor(const QString& word)
     if (!hasDecl && !hasImpl) {
         const QList<SymbolLocation> all = m_symbols.lookup(word);
         if (!all.isEmpty())
-            targets.append(JumpTarget{QStringLiteral("跳转定义"), all.first().file, all.first().line});
+            targets.append(JumpTarget{QStringLiteral("Go to Definition"),
+                                      all.first().file, all.first().line});
         return targets;
     }
 

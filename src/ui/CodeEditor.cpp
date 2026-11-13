@@ -1,6 +1,7 @@
 #include "ui/CodeEditor.h"
 
 #include "core/Encoding.h"
+#include "core/Lang.h"
 #include "core/UvprojModel.h"
 #include "ui/CSyntaxHighlighter.h"
 #include "ui/KeilStyle.h"
@@ -664,7 +665,8 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent* event)
     if (!word.isEmpty() && m_jumpResolver) {
         const QList<JumpTarget> targets = m_jumpResolver(word);
         for (const JumpTarget& target : targets) {
-            QAction* act = menu.addAction(target.label);
+            // label 存的是英文原文（词典的 key），显示时再翻译
+            QAction* act = menu.addAction(Lang::t(target.label.toLatin1().constData()));
             act->setToolTip(target.file);
             connect(act, &QAction::triggered, this, [this, target]() {
                 emit jumpRequested(target.file, target.line);
@@ -674,26 +676,26 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent* event)
             menu.addSeparator();
     }
 
-    QAction* actUndo = menu.addAction(QStringLiteral("Undo"));
+    QAction* actUndo = menu.addAction(Lang::t("Undo"));
     actUndo->setEnabled(document()->isUndoAvailable());
     connect(actUndo, &QAction::triggered, this, [this]() { undo(); });
 
-    QAction* actRedo = menu.addAction(QStringLiteral("Redo"));
+    QAction* actRedo = menu.addAction(Lang::t("Redo"));
     actRedo->setEnabled(document()->isRedoAvailable());
     connect(actRedo, &QAction::triggered, this, [this]() { redo(); });
 
     menu.addSeparator();
 
-    QAction* actCopy = menu.addAction(QStringLiteral("Copy"));
+    QAction* actCopy = menu.addAction(Lang::t("Copy"));
     actCopy->setEnabled(textCursor().hasSelection());
     connect(actCopy, &QAction::triggered, this, [this]() { copy(); });
 
-    QAction* actSelectAll = menu.addAction(QStringLiteral("Select All"));
+    QAction* actSelectAll = menu.addAction(Lang::t("Select All"));
     connect(actSelectAll, &QAction::triggered, this, [this]() { selectAll(); });
 
     menu.addSeparator();
 
-    QMenu* encodingMenu = menu.addMenu(QStringLiteral("Encoding"));
+    QMenu* encodingMenu = menu.addMenu(Lang::t("Encoding"));
     for (const QString& name : encodingChoices()) {
         QAction* action = encodingMenu->addAction(name);
         action->setCheckable(true);

@@ -266,7 +266,12 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
     setModal(true);
 
     auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(14, 14, 14, 12);
+    layout->setSpacing(8);
+
     auto* form = new QFormLayout;
+    form->setHorizontalSpacing(12);
+    form->setVerticalSpacing(8);
 
     auto* dirRow = new QWidget;
     auto* dirLayout = new QHBoxLayout(dirRow);
@@ -291,8 +296,7 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
     clangLayout->setContentsMargins(0, 0, 0, 0);
 
     m_clangFormat = new QLineEdit(Settings::instance().clangFormatPath());
-    m_clangFormat->setPlaceholderText(
-        QStringLiteral("留空则自动探测（PATH / LLVM / VS Code cpptools）"));
+    m_clangFormat->setPlaceholderText(QStringLiteral("留空 = 自动探测"));
 
     auto* clangBrowse = new QPushButton(Lang::t("Browse..."));
     auto* clangAuto = new QPushButton(QStringLiteral("自动探测"));
@@ -323,13 +327,18 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
 
     layout->addLayout(form);
 
+    layout->addSpacing(2);
+
     auto* hint = new QLabel(
-        QStringLiteral("填 armcc.exe / armclang.exe 所在目录，例如：\n"
+        QStringLiteral("编译器目录填 armcc.exe / armclang.exe 所在目录，例如\n"
                        "    C:/Keil_v5/ARM/ARMCC/bin        (AC5)\n"
                        "    C:/Keil_v5/ARM/ARMCLANG/bin     (AC6)\n"
                        "本程序不分发任何 ARM 编译器，授权由你自己的 Keil MDK 提供。"));
     hint->setWordWrap(true);
+    hint->setStyleSheet(QStringLiteral("color: #5b6270;"));
     layout->addWidget(hint);
+
+    layout->addSpacing(2);
 
     m_status = new QLabel;
     m_status->setWordWrap(true);
@@ -404,10 +413,8 @@ void ToolchainDialog::refreshClangStatus()
         m_clangStatus->setStyleSheet(QStringLiteral("color: #b01a1a;"));
     } else {
         m_clangStatus->setText(
-            QStringLiteral("没找到 clang-format（%1）。格式化只能用它，"
-                           "请装 LLVM 或在这里指定路径。")
-                .arg(Formatter::detectClangFormat().isEmpty() ? QStringLiteral("已探测过 PATH / LLVM")
-                                                              : QString()));
+            QStringLiteral("没找到 clang-format：格式化只能用它，"
+                           "装一个 LLVM 或在这里指定路径。"));
         m_clangStatus->setStyleSheet(QStringLiteral("color: #b01a1a;"));
     }
 }
