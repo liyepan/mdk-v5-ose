@@ -247,55 +247,52 @@ void blueArrowDown(QPainter& p, int cx, int top)
     px(p, cx - 2, top + 5, 1, 1, edge);
 }
 
-// 编译单个文件：虚线椭圆 + 一个向下的箭头
-void translateIcon(QPainter& p)
+// 这三个按钮统一成一套自己的视觉：同一张白纸 + 右下角不同的小徽标
+//   检查代码 -> 绿色对勾
+//   增量编译 -> 蓝色向下箭头
+//   完整编译 -> 蓝色环形箭头（"从头再来一遍"）
+void badgePage(QPainter& p)
 {
-    const QColor dash(0x2b, 0x3a, 0x52);
-
-    // 手工点的虚线椭圆（16x16 上正好一圈）
-    static const int ring[][2] = {
-        { 5, 2 }, { 6, 2 }, { 9, 2 }, { 10, 2 },
-        { 2, 4 }, { 3, 4 }, { 12, 4 }, { 13, 4 },
-        { 1, 6 }, { 1, 8 }, { 14, 6 }, { 14, 8 },
-        { 2, 10 }, { 3, 10 }, { 12, 10 }, { 13, 10 },
-        { 5, 12 }, { 6, 12 }, { 9, 12 }, { 10, 12 },
-        { 7, 13 }, { 8, 13 }
-    };
-    for (const auto& pt : ring)
-        px(p, pt[0], pt[1], 1, 1, dash);
-
-    blueArrowDown(p, 8, 1);
+    paperIcon(p, 1, 0, 11, 15, true);
 }
 
-// 编译整个工程：上面飘点是"待编译的文件"，下面的框是产物
-//   build 一个箭头，rebuild 两个箭头（uVision 就是这么区分的）
-void buildIcon(QPainter& p, int arrowCount)
+void checkBadgeIcon(QPainter& p)
 {
-    const QColor wall(0x2b, 0x3a, 0x52);
-    const QColor dot(0x6b, 0x7f, 0xa0);
+    badgePage(p);
 
-    // 左 / 右 / 底 三面墙，上面敞着（墙细一点，里面才透得出来）
-    px(p, 1, 5, 2, 9, wall);
-    px(p, 13, 5, 2, 9, wall);
-    px(p, 1, 12, 14, 2, wall);
+    p.setRenderHint(QPainter::Antialiasing, false);
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(QColor(0x1f, 0x7a, 0x2a), 2));
+    p.drawLine(QPointF(6.0, 10.5), QPointF(8.5, 13.0));
+    p.drawLine(QPointF(8.5, 13.0), QPointF(13.0, 7.0));
+}
 
-    // 框里的小点（点阵，别太稀）
-    for (int y = 8; y <= 11; y += 2)
-        for (int x = 4; x <= 12; x += 2)
-            px(p, x, y, 1, 1, dot);
+void incrementalIcon(QPainter& p)
+{
+    badgePage(p);
+    blueArrowDown(p, 10, 5);
+}
 
-    // 上面飘进来的点
-    px(p, 3, 2, 1, 1, wall);
-    px(p, 12, 1, 1, 1, wall);
-    px(p, 10, 3, 1, 1, wall);
-    px(p, 5, 1, 1, 1, wall);
+// 小一号的箭头，给"两个箭头并排"用
+void blueArrowDownSmall(QPainter& p, int cx, int top)
+{
+    const QColor fill(0x5c, 0x8c, 0xe8);
+    const QColor edge(0x2f, 0x54, 0xa6);
 
-    if (arrowCount == 1) {
-        blueArrowDown(p, 8, 3);
-    } else {
-        blueArrowDown(p, 5, 3);
-        blueArrowDown(p, 11, 3);
-    }
+    px(p, cx - 1, top, 2, 3, fill);
+    px(p, cx - 2, top, 1, 3, edge);
+    px(p, cx - 2, top + 3, 4, 1, fill);
+    px(p, cx - 1, top + 4, 2, 1, fill);
+    px(p, cx - 3, top + 3, 1, 1, edge);
+    px(p, cx - 2, top + 4, 1, 1, edge);
+}
+
+void fullBuildIcon(QPainter& p)
+{
+    badgePage(p);
+    // 两个箭头并排 = "全部重来"，和增量的单个箭头一眼能分开
+    blueArrowDownSmall(p, 6, 6);
+    blueArrowDownSmall(p, 12, 6);
 }
 
 // 剪刀
@@ -355,11 +352,11 @@ void paintIcon(QPainter& p, const QString& name, int size)
         px(p, 3, 2, 8, 8, kDiskBlue.darker(120));
         diskIcon(p, 4, 4, false);
     } else if (name == QLatin1String("build")) {
-        buildIcon(p, 1);
+        incrementalIcon(p);          // 增量编译
     } else if (name == QLatin1String("translate")) {
-        translateIcon(p);
+        checkBadgeIcon(p);           // 检查代码
     } else if (name == QLatin1String("rebuild")) {
-        buildIcon(p, 2);
+        fullBuildIcon(p);            // 完整编译
     } else if (name == QLatin1String("stop")) {
         p.setPen(QPen(kRed.darker(160), 1));
         p.setBrush(kRed);

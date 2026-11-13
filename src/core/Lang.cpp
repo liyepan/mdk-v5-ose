@@ -84,10 +84,10 @@ const QHash<QString, QString>& dictionary()
         add("&Project", QStringLiteral("工程(&P)"));
         add("Options for Target...", QStringLiteral("目标选项..."));
         add("Build Target", QStringLiteral("编译目标"));
-        add("Build target files (F7)", QStringLiteral("编译目标文件 (F7)"));
-        add("Rebuild all target files", QStringLiteral("重新编译所有目标文件"));
+        add("Build target files (F7)", QStringLiteral("增量编译 (F7)"));
+        add("Rebuild all target files", QStringLiteral("完整编译（重新编译全部）"));
         add("Translate", QStringLiteral("编译当前文件"));
-        add("Translate current file (Ctrl+F7)", QStringLiteral("编译当前文件 (Ctrl+F7)"));
+        add("Translate current file (Ctrl+F7)", QStringLiteral("检查代码（只编译当前文件）(Ctrl+F7)"));
         add("Clean targets", QStringLiteral("清理目标"));
         add("Stop build", QStringLiteral("停止编译"));
 
