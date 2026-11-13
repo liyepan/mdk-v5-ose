@@ -796,9 +796,9 @@ void MainWindow::createToolBars()
             &MainWindow::onTargetChanged);
     buildBar->addWidget(m_targetCombo);
 
-    // 魔术棒和左边的 Target 下拉框之间留一点缝：默认挨着只有 2px，看着挤
+    // 魔术棒和左边的 Target 下拉框之间留 2px 缝：默认挨着只有 2px，用户反馈看着挤
     auto* wandGap = new QWidget(buildBar);
-    wandGap->setFixedWidth(0);
+    wandGap->setFixedWidth(2);
     wandGap->setAttribute(Qt::WA_TransparentForMouseEvents);
     buildBar->addWidget(wandGap);
 
@@ -850,8 +850,15 @@ void MainWindow::dumpToolBarLayout()
             const QString label = action->toolTip().isEmpty()
                                       ? (action->text().isEmpty() ? action->objectName() : action->text())
                                       : action->toolTip();
-            std::fprintf(stderr, "[layout]   %-22s x=%4d w=%3d h=%3d\n",
-                         qPrintable(label), abs.x(), r.width(), r.height());
+            if (QWidget* w = bar->widgetForAction(action)) {
+                const QRect wr = w->geometry();
+                const QPoint wabs = bar->mapTo(this, wr.topLeft());
+                std::fprintf(stderr, "[layout]   %-22s action x=%4d | button x=%4d w=%3d\n",
+                             qPrintable(label), abs.x(), wabs.x(), wr.width());
+            } else {
+                std::fprintf(stderr, "[layout]   %-22s x=%4d w=%3d h=%3d\n",
+                             qPrintable(label), abs.x(), r.width(), r.height());
+            }
         }
 
         // 工具栏里的 QComboBox 不是 action，单独打
