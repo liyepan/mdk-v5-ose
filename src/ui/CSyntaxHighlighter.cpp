@@ -1,5 +1,40 @@
 #include "ui/CSyntaxHighlighter.h"
 
+namespace {
+
+// 找从 from 开始的 "/*"，跳过字符串字面量和 // 行注释。
+// 不跳的话 "// 见 /* 说明" 这种行会让后半个文件全变绿。
+int commentStartOutside(const QString& text, int from)
+{
+    for (int i = from; i + 1 < text.size(); ++i) {
+        const QChar c = text.at(i);
+
+        if (c == QLatin1Char('"') || c == QLatin1Char('\'')) {
+            const QChar quote = c;
+            ++i;
+            while (i < text.size()) {
+                if (text.at(i) == QLatin1Char('\\')) {
+                    i += 2;
+                    continue;
+                }
+                if (text.at(i) == quote)
+                    break;
+                ++i;
+            }
+            continue;
+        }
+
+        if (c == QLatin1Char('/') && text.at(i + 1) == QLatin1Char('/'))
+            return -1;                       // 行注释后面不可能再有代码
+
+        if (c == QLatin1Char('/') && text.at(i + 1) == QLatin1Char('*'))
+            return i;
+    }
+    return -1;
+}
+
+} // namespace
+
 CSyntaxHighlighter::CSyntaxHighlighter(QTextDocument* document, bool assembly)
     : QSyntaxHighlighter(document)
 {
@@ -180,19 +215,28 @@ void CSyntaxHighlighter::highlightBlock(const QString& text)
     setCurrentBlockState(0);
 
     int startIndex = 0;
-    if (previousBlockState() != 1)
-        startIndex = text.indexOf(QLatin1String("/*"));
+    if (previousBlockState() == 1) {
+        // 本行开头就在注释里：先找收尾，找不到说明整行都是注释
+        const int endIndex = text.indexOf(QLatin1String("*/"));
+        if (endIndex < 0) {
+            setCurrentBlockState(1);
+            setFormat(0, text.length(), m_multilineFormat);
+            return;
+        }
+        setFormat(0, endIndex + 2, m_multilineFormat);
+        startIndex = commentStartOutside(text, endIndex + 2);
+    } else {
+        startIndex = commentStartOutside(text, 0);
+    }
 
     while (startIndex >= 0) {
         const int endIndex = text.indexOf(QLatin1String("*/"), startIndex + 2);
-        int commentLength = 0;
-        if (endIndex == -1) {
+        if (endIndex < 0) {
             setCurrentBlockState(1);
-            commentLength = text.length() - startIndex;
-        } else {
-            commentLength = endIndex - startIndex + 2;
+            setFormat(startIndex, text.length() - startIndex, m_multilineFormat);
+            break;
         }
-        setFormat(startIndex, commentLength, m_multilineFormat);
-        startIndex = text.indexOf(QLatin1String("/*"), startIndex + commentLength);
+        setFormat(startIndex, endIndex - startIndex + 2, m_multilineFormat);
+        startIndex = commentStartOutside(text, endIndex + 2);
     }
 }

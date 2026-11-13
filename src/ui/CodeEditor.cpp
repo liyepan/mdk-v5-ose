@@ -133,6 +133,14 @@ void CodeEditor::applyFormattedText(const QString& text)
     const int line = before.blockNumber();
     const int column = before.positionInBlock();
 
+    // 光标如果在行首缩进里（包括正好在第一个字符前），格式化后要贴到正文的第一个
+    // 非空白字符前面，而不是傻站在第 0 列——不然缩进一变就觉得"光标跑了"
+    const QString beforeLine = before.block().text();
+    int firstNonSpace = 0;
+    while (firstNonSpace < beforeLine.size() && beforeLine.at(firstNonSpace).isSpace())
+        ++firstNonSpace;
+    const bool atContentStart = column <= firstNonSpace;
+
     QTextCursor cursor(document());
     cursor.beginEditBlock();
     cursor.select(QTextCursor::Document);
@@ -141,10 +149,20 @@ void CodeEditor::applyFormattedText(const QString& text)
 
     const int lastBlock = document()->blockCount() - 1;
     QTextBlock block = document()->findBlockByNumber(qBound(0, line, lastBlock));
+
+    int targetColumn = column;
+    if (atContentStart) {
+        const QString newLine = block.text();
+        int first = 0;
+        while (first < newLine.size() && newLine.at(first).isSpace())
+            ++first;
+        targetColumn = first;
+    }
+
     QTextCursor restored(block);
     // 列也不能越界：这行格式化后可能变短了
     const int maxColumn = qMax(0, block.length() - 1);
-    restored.setPosition(block.position() + qMin(column, maxColumn));
+    restored.setPosition(block.position() + qMin(targetColumn, maxColumn));
     setTextCursor(restored);
 
     document()->setModified(true);
