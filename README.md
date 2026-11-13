@@ -111,14 +111,26 @@
 唯一的可见差异：QDom 序列化不保留纯空行，重写后会少几行空白行
 （XML 语义无关），其余差异就只有你实际改的那几个值。
 
-工具栏最右边的"工程文件管理"按钮，或者 Project -> Manage Project Items（Alt+M）：
+工具栏最右边的"工程文件管理"按钮，或者 Project -> Manage Project Items（Alt+M）。
+布局和 uVision 一样，三列并排：
 
-- 树里是「分组 -> 文件」，双击分组名可以直接改名
-- **新建分组** / **添加文件...**（多选）/ **删除** / **上移** / **下移**
-- 删除分组会连带里面的文件，会先问一句
-- 点 OK 之后只重写 `.uvprojx` 里的 `<Groups>` 一节，
-  Target 选项、组级/文件级选项（`GroupOption` / `FileOption`）原样保留
-- 改完工程树和符号表会重新加载
+```
+[Project Items][Folders/Extensions][Books][Project Info/Layer]
+Project Targets:      Groups:              Files:
+ + × ↑ ↓              + × ↑ ↓              × ↑ ↓
+ Debug                 apl                  main.c
+ Release               drivers              sysPara.c
+                       Shell
+[Set as Current Target]                      [Add Files...]
+                                     [OK] [Cancel] [Help]
+```
+
+- 左列选 Target，中列显示它的分组，右列显示分组里的文件
+- **+** 新建分组 / **×** 删除 / **↑ ↓** 调顺序（分组、文件都支持，双击分组名可改名）
+- Target 那一列同样能复制新建、删除、调顺序；新建是**整段复制源 Target**
+- **Set as Current Target** 切换活动配置，**Add Files...** 往当前分组加文件（多选）
+- 点 OK 之后：Target 布局变了就重写 `<Targets>`（仅节点搬移/复制），
+  分组变了就重写 `<Groups>`；两处都只动对应的节点，其余配置原样保留
 
 ## 编辑器
 

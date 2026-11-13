@@ -2146,49 +2146,69 @@ void MainWindow::onManageProjectItems()
         return;
     }
 
-    Target* target = m_project.target(m_activeTarget);
-    if (!target)
-        return;
+    const QList<Target> before = m_project.targets;
 
-    ManageProjectDialog dialog(*target, m_project.directory(), this);
+    ManageProjectDialog dialog(m_project.targets, m_activeTarget, m_project.directory(), this);
     if (dialog.exec() != QDialog::Accepted)
         return;
 
-    const QList<ProjGroup> groups = dialog.groups();
-    if (groups.size() == target->groups.size()) {
-        // 什么都没改就别动文件（ProjGroup 没定义 ==，逐个字段比）
-        bool same = true;
-        for (int i = 0; i < groups.size() && same; ++i) {
-            const ProjGroup& a = groups.at(i);
-            const ProjGroup& b = target->groups.at(i);
-            if (a.name != b.name || a.files.size() != b.files.size()) {
-                same = false;
-                break;
-            }
-            for (int j = 0; j < a.files.size(); ++j) {
-                if (a.files.at(j).path != b.files.at(j).path) {
-                    same = false;
-                    break;
-                }
+    const QList<Target> after = dialog.targets();
+
+    // 只有分组/文件真的变了才写盘；没变的话一个字节都不碰
+    auto groupsSame = [](const QList<ProjGroup>& a, const QList<ProjGroup>& b) {
+        if (a.size() != b.size())
+            return false;
+        for (int i = 0; i < a.size(); ++i) {
+            if (a.at(i).name != b.at(i).name || a.at(i).files.size() != b.at(i).files.size())
+                return false;
+            for (int j = 0; j < a.at(i).files.size(); ++j) {
+                if (a.at(i).files.at(j).path != b.at(i).files.at(j).path)
+                    return false;
             }
         }
-        if (same)
+        return true;
+    };
+
+    // Target 列表（顺序 / 增删）变了的话，先把 <Targets> 同步成新布局
+    QStringList afterNames;
+    for (const Target& target : after)
+        afterNames << target.name;
+
+    bool layoutChanged = afterNames != dialog.originalNames();
+    if (layoutChanged) {
+        QString error;
+        if (!Uvproj::syncTargets(m_project.filePath, afterNames, dialog.cloneSources(), &error)) {
+            QMessageBox::warning(this, Lang::t("Manage Project Items"), error);
             return;
+        }
     }
 
-    Target updated = *target;
-    updated.groups = groups;
+    bool changed = layoutChanged;
+    for (int i = 0; i < after.size(); ++i) {
+        const bool sameGroups = (i < before.size())
+                                    && groupsSame(after.at(i).groups, before.at(i).groups);
+        if (sameGroups)
+            continue;
 
-    QString error;
-    if (!Uvproj::saveGroups(m_project.filePath, updated, &error)) {
-        QMessageBox::warning(this, Lang::t("Manage Project Items"), error);
+        QString error;
+        if (!Uvproj::saveGroups(m_project.filePath, after.at(i), &error)) {
+            QMessageBox::warning(this, Lang::t("Manage Project Items"), error);
+            return;
+        }
+        changed = true;
+    }
+
+    if (!changed)
         return;
-    }
 
-    target->groups = groups;
+    m_project.targets = after;
     m_symbols.clear();                 // 文件列表变了，符号表要重扫
     applyProject();
-    m_statusMessage->setText(QStringLiteral("工程已更新：%1 个分组").arg(groups.size()));
+
+    // 「Set as Current Target」改的是活动配置
+    m_activeTarget = qBound(0, dialog.currentTarget(), m_project.targets.size() - 1);
+    populateTargetCombo();
+    m_statusMessage->setText(QStringLiteral("工程已更新"));
 }
 
 void MainWindow::onOptionsForTarget()

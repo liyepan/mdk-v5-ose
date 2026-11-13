@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSet>
 #include <QTextCodec>
 #include <QTextStream>
 
@@ -484,6 +485,81 @@ bool saveTarget(const QString& path, const Target& target, QString* error)
     setChildText(doc, ldads, QStringLiteral("Misc"), target.linkerMisc);
     setChildFlag(doc, misc, QStringLiteral("useUlib"), target.useMicrolib);
 
+    return writeProjectXml(path, doc, original, error);
+}
+
+bool syncTargets(const QString& path, const QStringList& names,
+                 const QHash<QString, QString>& cloneFrom, QString* error)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        if (error)
+            *error = QStringLiteral("无法读取工程文件: ") + file.errorString();
+        return false;
+    }
+
+    const QByteArray original = file.readAll();
+    file.seek(0);
+
+    QDomDocument doc;
+    QString parseError;
+    int line = 0;
+    int column = 0;
+    if (!doc.setContent(&file, &parseError, &line, &column)) {
+        if (error)
+            *error = QStringLiteral("解析失败 (%1:%2): %3").arg(line).arg(column).arg(parseError);
+        return false;
+    }
+    file.close();
+
+    QDomElement root = doc.documentElement();
+    QDomElement targetsEl = root.firstChildElement(QStringLiteral("Targets"));
+    if (targetsEl.isNull()) {
+        if (error)
+            *error = QStringLiteral("工程文件里没有 <Targets>");
+        return false;
+    }
+
+    QHash<QString, QDomElement> existing;
+    for (QDomElement tEl = targetsEl.firstChildElement(QStringLiteral("Target"));
+         !tEl.isNull(); tEl = tEl.nextSiblingElement(QStringLiteral("Target"))) {
+        existing.insert(childText(tEl, QStringLiteral("TargetName")), tEl);
+    }
+
+    QDomElement freshTargets = doc.createElement(QStringLiteral("Targets"));
+    QSet<QString> seen;
+    for (const QString& name : names) {
+        if (name.isEmpty() || seen.contains(name))
+            continue;
+        seen.insert(name);
+
+        if (existing.contains(name)) {
+            freshTargets.appendChild(existing.value(name));    // 节点整体搬过去
+            continue;
+        }
+
+        // 新建的 target：整段复制源 Target，只改名字
+        const QDomElement sourceEl = existing.value(cloneFrom.value(name));
+        if (sourceEl.isNull())
+            continue;
+
+        QDomElement clone = sourceEl.cloneNode(true).toElement();
+        QDomElement nameEl = clone.firstChildElement(QStringLiteral("TargetName"));
+        if (!nameEl.isNull()) {
+            while (!nameEl.firstChild().isNull())
+                nameEl.removeChild(nameEl.firstChild());
+            nameEl.appendChild(doc.createTextNode(name));
+        }
+        freshTargets.appendChild(clone);
+    }
+
+    if (freshTargets.childNodes().isEmpty()) {
+        if (error)
+            *error = QStringLiteral("至少要保留一个 Target");
+        return false;
+    }
+
+    root.replaceChild(freshTargets, targetsEl);
     return writeProjectXml(path, doc, original, error);
 }
 

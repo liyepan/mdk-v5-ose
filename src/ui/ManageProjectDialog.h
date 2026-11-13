@@ -1,42 +1,71 @@
 #pragma once
 
 #include <QDialog>
+#include <QHash>
 #include <QList>
 
 #include "core/UvprojModel.h"
 
-class QTreeWidget;
-class QTreeWidgetItem;
-class QPushButton;
+class QListWidget;
+class QTabWidget;
 
-// Tools -> Manage Project Items：增删分组、加删文件、调整顺序。
-// 只改内存里的 Target::groups，点 OK 之后由主窗口写回 .uvprojx。
+// Tools -> Manage Project Items，布局照 uVision：
+//
+//   [Project Items][Folders/Extensions][Books][Project Info/Layer]
+//    Project Targets:      Groups:              Files:
+//    [new][del][^][v]      [new][del][^][v]     [del][^][v]
+//    +----------------+    +---------------+    +----------------+
+//    | Debug          |    | apl           |    | main.c         |
+//    | Release        |    | bsp           |    | sysPara.c      |
+//    +----------------+    +---------------+    +----------------+
+//    [Set as Current Target]                    [Add Files...]
+//                                       [OK] [Cancel] [Help]
 class ManageProjectDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    ManageProjectDialog(const Target& target, const QString& projectDir,
-                        QWidget* parent = nullptr);
+    ManageProjectDialog(const QList<Target>& targets, int currentTarget,
+                        const QString& projectDir, QWidget* parent = nullptr);
 
-    QList<ProjGroup> groups() const { return m_groups; }
+    QList<Target> targets() const { return m_targets; }
+    int currentTarget() const { return m_current; }
+
+    // 新建出来的 target 是从哪个复制来的（同步文件时要用）
+    QHash<QString, QString> cloneSources() const { return m_cloneSources; }
+    // 原来的 target 名字顺序，用来判断 target 列表有没有变
+    QStringList originalNames() const { return m_originalNames; }
 
 private:
-    void buildTree();
+    Target*       activeTarget();
+    const Target* activeTarget() const;
+    int           activeGroupIndex() const;
+
+    void rebuildTargetList(int selectTarget);
+    void rebuildGroupList(int selectGroup);
+    void rebuildFileList(int selectFile);
     void refreshButtons();
-    QTreeWidgetItem* currentGroupItem() const;   // 选中项所属的组
+
     void newGroup();
+    void removeGroup();
+    void moveGroup(int delta);
+    void renameGroup();
+
     void addFiles();
-    void removeSelected();
-    void moveSelected(int delta);
+    void removeFile();
+    void moveFile(int delta);
+
     void accept() override;
 
-    QString            m_projectDir;
-    QList<ProjGroup>   m_groups;
-    QTreeWidget*       m_tree = nullptr;
-    QPushButton*       m_btnNewGroup = nullptr;
-    QPushButton*       m_btnAddFiles = nullptr;
-    QPushButton*       m_btnRemove = nullptr;
-    QPushButton*       m_btnUp = nullptr;
-    QPushButton*       m_btnDown = nullptr;
+    QList<Target> m_targets;
+    QHash<QString, QString> m_cloneSources;
+    QStringList   m_originalNames;
+    int           m_current = 0;
+    int           m_group = -1;
+    QString       m_projectDir;
+
+    QListWidget*  m_targetList = nullptr;
+    QListWidget*  m_groupList = nullptr;
+    QListWidget*  m_fileList = nullptr;
+    QTabWidget*   m_tabs = nullptr;
 };
