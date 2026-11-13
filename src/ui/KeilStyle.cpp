@@ -560,7 +560,8 @@ QMenu::separator { height: 1px; background: #e8ecf1; margin: 5px 10px; }
 /* ---------- 工具栏 ---------- */
 QToolBar { background: #ffffff; border: none; border-bottom: 1px solid #d8dee6;
            spacing: 2px; padding: 1px 4px; }
-QToolBar::separator { width: 1px; background: #dde3ea; margin: 4px 6px; }
+/* 分隔线：1px 线 + 两侧各 3px 边距（原来是 6px，两侧太占地方） */
+QToolBar::separator { width: 1px; background: #dde3ea; margin: 4px 3px; }
 QToolButton { background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 2px; }
 QToolButton:hover { background: #eef2f7; border-color: #dbe2ea; }
 QToolButton:pressed { background: #dfe6ef; }
