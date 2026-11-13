@@ -196,6 +196,68 @@ void parseText(const QString& text, FileParse& out)
                     out.symbols.append(sym);
                 }
             } else if (isIdentStart(c0) && (q - i) <= 12) {
+                // 单行 typedef：typedef unsigned char u8;
+                // 结构体那种带花括号的由下面的 '}' 分支处理，这里只管没有 '{' 的
+                if (startsWithWord(d + q, eol - q, "typedef")) {
+                    int p = q + 7;
+                    bool hasBrace = false;
+                    bool hasParen = false;
+                    int lastIdentStart = -1;
+                    int lastIdentEnd = -1;
+                    for (int k = p; k < eol; ++k) {
+                        const QChar ch = d[k];
+                        if (ch == QLatin1Char('{')) {
+                            hasBrace = true;
+                            break;
+                        }
+                        if (ch == QLatin1Char('('))
+                            hasParen = true;
+                        if (isIdentStart(ch.unicode())
+                            && (k == p || !isIdentChar(d[k - 1].unicode()))) {
+                            int e = k;
+                            while (e < eol && isIdentChar(d[e].unicode()))
+                                ++e;
+                            lastIdentStart = k;
+                            lastIdentEnd = e;
+                            k = e - 1;
+                        }
+                    }
+                    // 函数指针 typedef：typedef void (*isr_t)(int arg);
+                    // 名字在 (* ... ) 里面，单独认一下
+                    if (!hasBrace && hasParen) {
+                        for (int k = p; k + 2 < eol; ++k) {
+                            if (!(d[k] == QLatin1Char('(') && d[k + 1] == QLatin1Char('*')))
+                                continue;
+                            int s2 = k + 2;
+                            while (s2 < eol && isSpaceTab(d[s2].unicode()))
+                                ++s2;
+                            const int b2 = s2;
+                            while (s2 < eol && isIdentChar(d[s2].unicode()))
+                                ++s2;
+                            int e2 = s2;
+                            while (e2 < eol && isSpaceTab(d[e2].unicode()))
+                                ++e2;
+                            if (s2 > b2 && e2 < eol && d[e2] == QLatin1Char(')')) {
+                                ParsedSymbol sym;
+                                sym.name = QString(d + b2, s2 - b2);
+                                sym.line = lineNo;
+                                sym.definition = true;
+                                out.symbols.append(sym);
+                            }
+                            break;
+                        }
+                    }
+
+                    // 最后一个标识符会落在参数里，所以带括号的一律不走这条
+                    if (!hasBrace && !hasParen && lastIdentStart >= 0 && lastIdentEnd > lastIdentStart) {
+                        ParsedSymbol sym;
+                        sym.name = QString(d + lastIdentStart, lastIdentEnd - lastIdentStart);
+                        sym.line = lineNo;
+                        sym.definition = true;
+                        out.symbols.append(sym);
+                    }
+                }
+
                 // struct Foo { / enum Bar { / union Baz {  —— 有标签名的类型
                 {
                     int w = q;
