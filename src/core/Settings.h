@@ -39,6 +39,11 @@ public:
     QString clangFormatPath() const;
     void setClangFormatPath(const QString& path);
 
+    // 格式化风格：空 = 自动（工程里有 .clang-format 就用它，否则用内置风格）
+    // 其它值就是 clang-format 的内置风格名：LLVM / Google / Chromium / Mozilla / WebKit / Microsoft / GNU
+    QString formatStyle() const;
+    void setFormatStyle(const QString& style);
+
     // ---- 最近打开的工程 ----
     QString lastProject() const;
     void setLastProject(const QString& path);

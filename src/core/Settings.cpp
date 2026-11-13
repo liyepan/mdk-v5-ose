@@ -14,6 +14,7 @@ const char* kBuildJobs     = "build/jobs";
 const char* kLanguage      = "ui/language";
 const char* kFormatOnSave  = "editor/formatOnSave";
 const char* kClangFormat   = "editor/clangFormatPath";
+const char* kFormatStyle   = "editor/formatStyle";
 const char* kGeometry      = "window/geometry";
 const char* kState         = "window/state";
 }
@@ -95,6 +96,16 @@ QString Settings::clangFormatPath() const
 void Settings::setClangFormatPath(const QString& path)
 {
     m_s.setValue(QLatin1String(kClangFormat), path);
+}
+
+QString Settings::formatStyle() const
+{
+    return m_s.value(QLatin1String(kFormatStyle)).toString();
+}
+
+void Settings::setFormatStyle(const QString& style)
+{
+    m_s.setValue(QLatin1String(kFormatStyle), style);
 }
 
 QString Settings::lastProject() const

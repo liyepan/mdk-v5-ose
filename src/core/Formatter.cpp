@@ -100,10 +100,19 @@ Formatter::Result Formatter::runClangFormat(const QString& clang, const QString&
     temp.flush();
     const QString tempPath = temp.fileName();
 
-    // 工程里有 .clang-format 就按它的来，没有才用内置兜底风格
-    const QString styleArg = findStyleFile(filePath).isEmpty()
-                                 ? QStringLiteral("-style=") + QLatin1String(kFallbackStyle)
-                                 : QStringLiteral("-style=file");
+    // 风格：用户明确选了就用他选的；选"自动"时工程里有 .clang-format 就按它，
+    // 没有才用内置兜底风格
+    const QString style = Settings::instance().formatStyle();
+    QString styleArg;
+    if (style == QLatin1String("__builtin")) {
+        styleArg = QStringLiteral("-style=") + QLatin1String(kFallbackStyle);
+    } else if (!style.isEmpty()) {
+        styleArg = QStringLiteral("-style=") + style;
+    } else if (!findStyleFile(filePath).isEmpty()) {
+        styleArg = QStringLiteral("-style=file");
+    } else {
+        styleArg = QStringLiteral("-style=") + QLatin1String(kFallbackStyle);
+    }
 
     QProcess proc;
     proc.setProgram(clang);
@@ -145,6 +154,18 @@ Formatter::Result Formatter::runClangFormat(const QString& clang, const QString&
     r.text = QString::fromUtf8(output);
     r.ok = true;
     return r;
+}
+
+QString Formatter::activeStyleName(const QString& filePath)
+{
+    const QString style = Settings::instance().formatStyle();
+    if (style == QLatin1String("__builtin"))
+        return QStringLiteral("内置（4 空格 + Allman）");
+    if (!style.isEmpty())
+        return style;
+    if (!findStyleFile(filePath).isEmpty())
+        return QStringLiteral("工程 .clang-format");
+    return QStringLiteral("内置（4 空格 + Allman）");
 }
 
 Formatter::Result Formatter::format(const QString& input, const QString& filePath)

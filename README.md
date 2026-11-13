@@ -103,8 +103,11 @@
   按住 Ctrl 把鼠标放上去就画一条蓝色下划线；只按 Ctrl 不动鼠标也会立刻出现
 - **右键跳转菜单**：在标识符上右键，函数会给「跳转实现」（.c 里的函数体）和
   「跳转定义」（.h 里的声明）两项；结构体 / 枚举 / 宏这类只在头文件里的，只给「跳转定义」
-- **格式化只用 clang-format**（和 VS Code C/C++ 插件同一个引擎）。工程里有 `.clang-format`
-  就按你的配置来，没有就用内置兜底风格（4 空格、Allman、不限列宽）
+- **格式化只用 clang-format**（和 VS Code C/C++ 插件同一个引擎）
+- **风格可选**：Tools -> Configure Toolchain -> `格式化风格`，有
+  自动 / 内置（4 空格 + Allman）/ LLVM / Google / Chromium / Mozilla / WebKit / Microsoft / GNU。
+  选"自动"时工程里有 `.clang-format` 就按它，没有才用内置风格
+- 格式化后光标按"第几行第几列"回到原位（不会因为行首多出缩进就跑到词中间）
 - **路径在这里配**：Tools -> Configure Toolchain 里的 `clang-format:` 一行，
   可以直接填路径、"浏览…"、"自动探测"。留空就自动找 PATH / LLVM / VS Code cpptools 自带的那份
 - 找不到 clang-format 时会明确报错并问你要不要现在去配置，**不会**偷偷用别的引擎顶上

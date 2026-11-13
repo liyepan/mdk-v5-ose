@@ -1744,7 +1744,8 @@ void MainWindow::formatEditor(CodeEditor* editor, bool interactive)
     }
 
     editor->applyFormattedText(result.text);
-    m_statusMessage->setText(QStringLiteral("已用 clang-format 格式化"));
+    m_statusMessage->setText(QStringLiteral("已用 clang-format 格式化（%1）")
+                                 .arg(Formatter::activeStyleName(editor->filePath())));
 }
 
 void MainWindow::onFormatDocument()

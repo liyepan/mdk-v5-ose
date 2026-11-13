@@ -127,7 +127,11 @@ void CodeEditor::applyFormattedText(const QString& text)
     if (text == toPlainText())
         return;
 
-    const int position = textCursor().position();
+    // 按"第几行第几列"记光标，不能记字符偏移：
+    // 格式化会改缩进，行首凭空多出几个空格，偏移量一平移光标就跑到词中间去了。
+    const QTextCursor before = textCursor();
+    const int line = before.blockNumber();
+    const int column = before.positionInBlock();
 
     QTextCursor cursor(document());
     cursor.beginEditBlock();
@@ -135,9 +139,12 @@ void CodeEditor::applyFormattedText(const QString& text)
     cursor.insertText(text);
     cursor.endEditBlock();
 
-    // 尽量把光标放回原处（行变了就夹到文档末尾）
-    QTextCursor restored(document());
-    restored.setPosition(qBound(0, position, qMax(0, document()->characterCount() - 1)));
+    const int lastBlock = document()->blockCount() - 1;
+    QTextBlock block = document()->findBlockByNumber(qBound(0, line, lastBlock));
+    QTextCursor restored(block);
+    // 列也不能越界：这行格式化后可能变短了
+    const int maxColumn = qMax(0, block.length() - 1);
+    restored.setPosition(block.position() + qMin(column, maxColumn));
     setTextCursor(restored);
 
     document()->setModified(true);

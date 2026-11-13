@@ -85,5 +85,6 @@ private:
 
     // 格式化用的 clang-format（可以在这一起配）
     QLineEdit* m_clangFormat = nullptr;
+    QComboBox* m_formatStyle = nullptr;
     QLabel*    m_clangStatus = nullptr;
 };

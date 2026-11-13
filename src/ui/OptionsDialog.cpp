@@ -301,6 +301,26 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
     clangLayout->addWidget(clangAuto);
 
     form->addRow(QStringLiteral("clang-format:"), clangRow);
+
+    // 风格：空 = 自动
+    m_formatStyle = new QComboBox;
+    m_formatStyle->addItem(QStringLiteral("自动（工程里有 .clang-format 就用它）"), QString());
+    m_formatStyle->addItem(QStringLiteral("内置（4 空格缩进 + Allman，贴近 Keil 代码习惯）"),
+                           QStringLiteral("__builtin"));
+    for (const char* name : {"LLVM", "Google", "Chromium", "Mozilla", "WebKit", "Microsoft", "GNU"})
+        m_formatStyle->addItem(QString::fromLatin1(name), QString::fromLatin1(name));
+
+    const QString savedStyle = Settings::instance().formatStyle();
+    int styleIndex = 0;
+    for (int i = 0; i < m_formatStyle->count(); ++i) {
+        if (m_formatStyle->itemData(i).toString() == savedStyle) {
+            styleIndex = i;
+            break;
+        }
+    }
+    m_formatStyle->setCurrentIndex(styleIndex);
+    form->addRow(QStringLiteral("格式化风格:"), m_formatStyle);
+
     layout->addLayout(form);
 
     auto* hint = new QLabel(
@@ -331,6 +351,8 @@ ToolchainDialog::ToolchainDialog(const Toolchain& current, QWidget* parent)
     });
     connect(m_clangFormat, &QLineEdit::textChanged, this,
             [this](const QString&) { refreshClangStatus(); });
+    connect(m_formatStyle, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int) { refreshClangStatus(); });
     connect(m_dir, &QLineEdit::textChanged, this, &ToolchainDialog::refreshStatus);
     connect(m_family, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, [this](int) { refreshStatus(); });
@@ -364,9 +386,18 @@ void ToolchainDialog::refreshClangStatus()
         path = Formatter::detectClangFormat();
     }
 
+    const QString style = m_formatStyle ? m_formatStyle->currentData().toString() : QString();
+    QString styleText;
+    if (style.isEmpty())
+        styleText = QStringLiteral("，风格：自动（有 .clang-format 就按它）");
+    else if (style == QLatin1String("__builtin"))
+        styleText = QStringLiteral("，风格：内置（4 空格 + Allman）");
+    else
+        styleText = QStringLiteral("，风格：%1").arg(style);
+
     if (!path.isEmpty()) {
-        m_clangStatus->setText(QStringLiteral("格式化将使用: %1")
-                                   .arg(QDir::toNativeSeparators(path)));
+        m_clangStatus->setText(QStringLiteral("格式化将使用: %1%2")
+                                   .arg(QDir::toNativeSeparators(path), styleText));
         m_clangStatus->setStyleSheet(QStringLiteral("color: #1a7f37;"));
     } else if (!typed.isEmpty()) {
         m_clangStatus->setText(QStringLiteral("这个文件不存在: %1").arg(typed));
@@ -412,8 +443,9 @@ void ToolchainDialog::accept()
         return;
     }
 
-    // clang-format 路径是应用级设置，直接存掉（这个对话框是唯一能改它的地方）
+    // clang-format 路径和风格是应用级设置，直接存掉（这个对话框是唯一能改它的地方）
     Settings::instance().setClangFormatPath(m_clangFormat->text().trimmed());
+    Settings::instance().setFormatStyle(m_formatStyle->currentData().toString());
     Settings::instance().sync();
 
     QDialog::accept();
