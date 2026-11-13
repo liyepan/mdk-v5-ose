@@ -1822,14 +1822,27 @@ void MainWindow::onFormatDocument()
 
 void MainWindow::onSaveAll()
 {
+    saveAllModified();
+}
+
+// 保存所有改过的文件。开了"保存时格式化"的话，和 Ctrl+S 一样先格式化再存。
+// 返回 false 表示用户取消了另存为（关窗口时要用这个结果决定关不关）
+bool MainWindow::saveAllModified()
+{
+    const bool formatOnSave = Settings::instance().formatOnSave();
+
     for (int i = 0; i < m_tabs->count(); ++i) {
         auto* editor = qobject_cast<CodeEditor*>(m_tabs->widget(i));
-        if (editor && editor->document()->isModified()) {
-            // 未命名的会弹另存为；用户取消就停下，别接着烦他
-            if (!saveEditorInteractive(editor))
-                return;
-        }
+        if (!editor || !editor->document()->isModified())
+            continue;
+
+        if (formatOnSave)
+            formatEditor(editor, false);   // 失败只在状态栏提示，照样往下存
+
+        if (!saveEditorInteractive(editor))
+            return false;
     }
+    return true;
 }
 
 void MainWindow::changeEditorZoom(int delta)
@@ -2336,14 +2349,9 @@ void MainWindow::closeEvent(QCloseEvent* event)
             return;
         }
         if (answer == QMessageBox::SaveAll) {
-            for (int i = 0; i < m_tabs->count(); ++i) {
-                auto* editor = qobject_cast<CodeEditor*>(m_tabs->widget(i));
-                if (!editor || !editor->document()->isModified())
-                    continue;
-                if (!saveEditorInteractive(editor)) {
-                    event->ignore();     // 另存为被取消
-                    return;
-                }
+            if (!saveAllModified()) {
+                event->ignore();         // 另存为被取消
+                return;
             }
         }
     }

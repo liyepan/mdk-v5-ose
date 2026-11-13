@@ -112,7 +112,8 @@
   可以直接填路径、"浏览…"、"自动探测"。留空就自动找 PATH / LLVM / VS Code cpptools 自带的那份
 - 找不到 clang-format 时会明确报错并问你要不要现在去配置，**不会**偷偷用别的引擎顶上
   （两套引擎风格不一致，会把工程改花）
-- Shift+Alt+F 手动格式化；Ctrl+S 自动格式化（Tools -> Format on Save 可关）
+- Shift+Alt+F 手动格式化；Ctrl+S 和 **Save All** 都会先格式化再存盘
+  （Tools -> Format on Save 可关；关窗口时的"全部保存"同样会格式化）
 
 语法配色对齐 VS Code Light+：控制关键字紫、声明关键字蓝、类型青、函数名棕、
 全大写宏紫、数字绿、字符串暗红、注释绿斜体。

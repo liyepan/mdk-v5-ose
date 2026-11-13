@@ -46,6 +46,7 @@ private slots:
     void onSaveAs();
     bool saveAsFor(CodeEditor* editor);
     bool saveEditorInteractive(CodeEditor* editor);
+    bool saveAllModified();
     void refreshTabTitle(CodeEditor* editor);
     void onNewProject();
     void onOpenProject();
