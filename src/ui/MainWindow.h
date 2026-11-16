@@ -170,6 +170,7 @@ private:
     Toolchain   m_toolchain;
     BuildEngine* m_engine = nullptr;
     Flasher*     m_flasher = nullptr;   // 烧写用的外部进程封装
+    QAction*     m_actFind = nullptr;
     QAction*     m_actReplace = nullptr;
     FindReplaceDialog* m_findDialog = nullptr;   // 非模态的查找替换
     SymbolIndex m_symbols;

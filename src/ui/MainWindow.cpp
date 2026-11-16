@@ -476,7 +476,8 @@ void MainWindow::createMainToolbarActions()
     // 符号下拉框插在 Find Next 之前（uVision 就是这么排的）
     m_symbolComboAnchor = add(QStringLiteral("find"), QStringLiteral("Find Next"),
                               QKeySequence(Qt::Key_F3), &MainWindow::onFindNext);
-    add(QStringLiteral("search"), QStringLiteral("Find"), QKeySequence::Find, &MainWindow::onFind);
+    m_actFind = add(QStringLiteral("search"), QStringLiteral("Find"), QKeySequence::Find,
+                    &MainWindow::onFind);
     m_actReplace = add(QStringLiteral("search"), QStringLiteral("Replace"),
                        QKeySequence::Replace, &MainWindow::onReplace);
     m_mainBarActions << nullptr;
@@ -550,9 +551,10 @@ void MainWindow::createMenus()
             currentEditor()->paste();
     });
     editMenu->addSeparator();
-    QAction* find = editMenu->addAction(Lang::t("Find..."));
-    find->setShortcut(QKeySequence::Find);
-    find->setEnabled(false);
+    if (m_actFind)
+        editMenu->addAction(m_actFind);
+    if (m_actReplace)
+        editMenu->addAction(m_actReplace);
     editMenu->addAction(Lang::t("Go to Line..."), this, [this]() {
         bool ok = false;
         const int line = QInputDialog::getInt(this, Lang::t("Go to Line"),
