@@ -237,30 +237,17 @@ git push origin main v0.2.0
 tag 推到 Gitea（源仓库）→ 镜像带到 GitHub → 工作流的 Release 就挂在这个 tag 上。
 tag 两边都有，镜像的 prune 不会动它，Release 也就不会掉成草稿。
 
-### 三种修法（按推荐顺序）
+### 结论
 
-1. **治本：关掉 Gitea 镜像的 prune**
-   仓库 → 设置 → 仓库 → 推送镜像 → 编辑 → 取消勾选 "启用 prune"（删除远端多余引用）。
-   关掉之后镜像只做"推送本地已有的 ref"，不会删 GitHub 上的 tag。
+根因就一条：**tag 只在 GitHub 上创建，被源仓库（Gitea）的镜像 prune 掉了。**
 
-2. **治本（不依赖设置）：发版时在本地打 tag 推到 Gitea**
-   ```bash
-   git tag v0.2.0 && git push origin v0.2.0
-   ```
-   这样 Gitea 和 GitHub 上都有这个 tag，prune 也不会删它，
-   Release 就永远挂在同一个 tag 上。
+所以发版时把 tag 一起推到源仓库就行（见上面「发版流程」），
+tag 两边都有，镜像不会动它，Release 也就不会掉成草稿。
 
-3. **兜底：工作流每小时自愈**（已经加上了）
-   `repair-releases` job 每小时检查一次草稿 Release：
-   tag 没了就按 `target_commitish` 补回来，然后把草稿重新发布。
-   ```
-   gh api /repos/$repo/git/ref/tags/$tag      # 没了？
-   gh api -X POST /repos/$repo/git/refs ...   # 补 tag
-   gh api -X PATCH /repos/$repo/releases/$id -F draft=false   # 取消草稿
-   ```
+万一哪天又看到 Release 不见了，去 GitHub 的 **Releases → Drafts** 看一眼，
+九成是又掉成草稿了：点 Publish 即可，或者命令行：
 
-注意：`schedule` 触发时 **不会**重新跑 40 分钟的 Windows 编译（`windows-x86_64` 加了
-`github.event_name != 'schedule'` 守卫），自愈 job 几秒钟就完事。
+    gh release edit v0.2.0 --draft=false
 
 ## 构建
 
