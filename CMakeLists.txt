@@ -23,6 +23,7 @@ set(APP_SOURCES
     src/core/Settings.cpp
     src/core/UvprojModel.cpp
     src/core/UvprojReader.cpp
+    src/core/Uvoptx.cpp
     src/core/Toolchain.cpp
     src/core/Diagnostic.cpp
     src/core/BuildEngine.cpp
@@ -48,6 +49,7 @@ set(APP_HEADERS
     src/core/Settings.h
     src/core/UvprojModel.h
     src/core/UvprojReader.h
+    src/core/Uvoptx.h
     src/core/Toolchain.h
     src/core/Diagnostic.h
     src/core/BuildEngine.h

@@ -649,6 +649,15 @@ void CodeEditor::toggleBreakpointAtCursor()
     m_lineNumberArea->update();
 }
 
+void CodeEditor::addBreakpointAtLine(int line)
+{
+    const int block = line - 1;
+    if (block < 0 || block >= document()->blockCount() || m_breakpoints.contains(block))
+        return;
+    m_breakpoints.insert(block);
+    m_lineNumberArea->update();
+}
+
 void CodeEditor::removeBreakpointAtCursor()
 {
     m_breakpoints.remove(textCursor().blockNumber());

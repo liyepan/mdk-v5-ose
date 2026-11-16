@@ -7,6 +7,7 @@
 #include "core/Lang.h"
 #include "core/SymbolIndex.h"
 #include "core/Toolchain.h"
+#include "core/Uvoptx.h"
 #include "core/UvprojModel.h"
 #include "ui/CodeEditor.h"   // JumpTarget
 
@@ -149,6 +150,9 @@ private:
     void formatEditor(CodeEditor* editor, bool interactive);
     bool saveEditor(CodeEditor* editor);
     void ensureSymbolIndex();
+    // 读同目录同名的 .uvoptx（当前 target、调试器、断点、watch）
+    void loadUvoptx();
+    const UvoptxTarget* uvoptxTarget() const;
     QList<JumpTarget> jumpTargetsFor(const QString& word);
     QStringList currentIncludeDirs() const;
     QStringList completionWords();
@@ -170,6 +174,7 @@ private:
     Toolchain   m_toolchain;
     BuildEngine* m_engine = nullptr;
     Flasher*     m_flasher = nullptr;   // 烧写用的外部进程封装
+    Uvoptx       m_uvoptx;              // .uvoptx（只读）
     QAction*     m_actFind = nullptr;
     QAction*     m_actReplace = nullptr;
     FindReplaceDialog* m_findDialog = nullptr;   // 非模态的查找替换

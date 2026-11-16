@@ -76,6 +76,7 @@ public:
 
     // 断点（只做标记，调试器还没接）
     void toggleBreakpointAtCursor();
+    void addBreakpointAtLine(int line);   // 1 基行号，从 .uvoptx 继承用
     void removeBreakpointAtCursor();
     void clearBreakpoints();
 

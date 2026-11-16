@@ -115,6 +115,32 @@
 - 工具没配好会先弹设置对话框
 - 日志逐行进 Build Output，失败弹错误框，3 分钟超时自动中止
 
+## 读 .uvoptx（只读，不写）
+
+`.uvoptx` 是 uVision 的工程选项文件，和 `.uvprojx` 同目录同名。里面存的是
+`.uvprojx` 不放的东西，我们**只读不写**（写它风险太大，uVision 自己也常重写）。
+
+打开工程时会自动读同名的 `.uvoptx`，用上这些：
+
+| 内容 | 用在哪 |
+|---|---|
+| `OPTFL/IsCurrentTarget` | 自动选中 uVision 里当前那个 Target |
+| `DebugOpt/pMon` + `TargetDriverDllRegistry` | 状态栏显示 `J-LINK 5000kHz` 这样的调试器信息 |
+| J-Link 参数里的 `-ZTIFSpeedSel` / `-FS` / `-FL` / `$$Device:` | 烧写时优先用工程里调好的速度、器件、Flash 地址 |
+| `WatchWindow1/2`、`MemoryWindow1` | 已解析（等做调试会话时直接用） |
+| `Breakpoint` | 打开文件时把 Keil 里的断点带进编辑器的行号栏 |
+| `Extensions` | 已解析（文件类型识别用） |
+
+实测（拿你给的 xs035Boot.uvoptx）：
+
+    Debug    current=1 sim=0 driver='Segger\\JL2CM3.dll'
+             device='GD32F103RE' speed=5000 kHz flash=0x8000000 size=0x80000 algo='GD32F10x_HD.FLM'
+             watch=6 个: readBuf | baseAddr | offset | totalBuffCount,0x0A | rxMsg | ...
+             memory=1 个: 0x08010800
+
+工程里把 Release 排到第一个，打开后工具栏的 Target 仍然显示 **Debug** —— 因为
+`.uvoptx` 里 `IsCurrentTarget` 指的是它。
+
 ## 写回 .uvprojx 时保证不破坏 Keil 的构建
 
 改 Target 选项（Options for Target）和工程管理器都会写回 `.uvprojx`，

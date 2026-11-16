@@ -5,6 +5,7 @@
 #include "core/ProjectLoader.h"
 #include "core/Settings.h"
 #include "core/Timing.h"
+#include "core/Uvoptx.h"
 #include "core/UvprojReader.h"
 #include "ui/BuildOutput.h"
 #include "ui/CodeEditor.h"
@@ -1209,6 +1210,7 @@ void MainWindow::onProjectLoaded()
     } else {
         m_project = project;
         m_activeTarget = 0;
+        loadUvoptx();     // 里面会按 .uvoptx 的 IsCurrentTarget 选中 target
 
         Settings::instance().setLastProject(m_project.filePath);
         Settings::instance().addRecentProject(m_project.filePath);
@@ -1269,6 +1271,7 @@ void MainWindow::applyProject()
     applyProbe.mark("symbol combo");
 
     updateWindowTitle();
+    updateCompilerStatus();   // 里面会带上 .uvoptx 里的调试器信息
     setBusy(false);
 
     m_statusMessage->setText(Lang::t("Project '%1' loaded.")
@@ -1391,6 +1394,14 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
     editor->setCompletions(completionWords());
 
     editor->setProperty("baseTitle", QFileInfo(abs).fileName());
+    // 从 .uvoptx 继承这个文件的断点
+    if (const UvoptxTarget* opt = uvoptxTarget()) {
+        for (const UvoptxTarget::Breakpoint& bp : opt->breakpoints) {
+            if (Uvproj::resolvePath(m_project.directory(), bp.file) == abs)
+                editor->addBreakpointAtLine(bp.line);
+        }
+    }
+
     const int index = m_tabs->addTab(editor, QFileInfo(abs).fileName());
     connect(editor->document(), &QTextDocument::modificationChanged, this,
             [this, editor](bool) { refreshTabTitle(editor); });
@@ -1950,6 +1961,41 @@ void MainWindow::ensureSymbolIndex()
         m_symbols.build(m_project, m_activeTarget);
 }
 
+// 读同目录同名的 .uvoptx。只读不写：写它风险太大（uVision 自己也常重写）。
+void MainWindow::loadUvoptx()
+{
+    m_uvoptx = Uvoptx();
+
+    const QString path = UvoptxReader::pathForProject(m_project.filePath);
+    if (!QFileInfo::exists(path))
+        return;
+
+    QString error;
+    if (!UvoptxReader::load(path, m_uvoptx, &error)) {
+        // 解析不了就算了，不影响打开工程
+        m_statusMessage->setText(error);
+        return;
+    }
+
+    // uVision 里"当前 target"记在 .uvoptx 的 IsCurrentTarget 里
+    const UvoptxTarget* current = m_uvoptx.currentTarget();
+    if (!current)
+        return;
+    const int index = m_project.indexOfTarget(current->name);
+    if (index >= 0)
+        m_activeTarget = index;
+}
+
+const UvoptxTarget* MainWindow::uvoptxTarget() const
+{
+    if (!m_uvoptx.valid)
+        return nullptr;
+    const Target* target = m_project.target(m_activeTarget);
+    if (!target)
+        return nullptr;
+    return m_uvoptx.target(target->name);
+}
+
 // 自动补全的词表：工程符号 + C/C++ 关键字。
 // 符号表是排好序的，这里直接拼在一起，QCompleter 按前缀过滤够用了。
 QStringList MainWindow::completionWords()
@@ -2218,9 +2264,31 @@ void MainWindow::updateCompilerStatus()
     const QString compiler = m_toolchain.isValid()
                                  ? Lang::t("Compiler: %1").arg(m_toolchain.family)
                                  : Lang::t("Compiler: not configured");
-    m_statusToolchain->setText(Lang::t("%1  |  Jobs: %2")
-                                   .arg(compiler)
-                                   .arg(m_engine->jobs()));
+    QString text = Lang::t("%1  |  Jobs: %2")
+                       .arg(compiler)
+                       .arg(m_engine->jobs());
+
+    // 和 uVision 一样，状态栏也显示调试器（从 .uvoptx 读出来的）
+    if (const UvoptxTarget* opt = uvoptxTarget()) {
+        if (!opt->driver.isEmpty()) {
+            QString driver = opt->driver;
+            driver.replace(QLatin1Char('\\'), QLatin1Char('/'));
+            driver = QFileInfo(driver).completeBaseName();      // JL2CM3
+            if (driver == QLatin1String("JL2CM3"))
+                driver = QStringLiteral("J-LINK");
+            else if (driver == QLatin1String("UL2CM3"))
+                driver = QStringLiteral("ULINK");
+
+            QString extra = driver;
+            if (opt->speedKhz > 0)
+                extra += QStringLiteral(" %1kHz").arg(opt->speedKhz);
+            if (!opt->device.isEmpty())
+                extra += QLatin1Char(' ') + opt->device;
+            text += QStringLiteral("  |  ") + extra;
+        }
+    }
+
+    m_statusToolchain->setText(text);
 }
 
 void MainWindow::onConfigureToolchain()
@@ -2550,6 +2618,15 @@ void MainWindow::onDownload()
     FlashRequest request;
     request.filePath = artifact;
     request.device = target->device;
+
+    // .uvoptx 里如果在 Keil 里配过 J-Link（速度、器件），优先用它——
+    // 那是针对这个工程调好的参数
+    if (const UvoptxTarget* opt = uvoptxTarget()) {
+        if (!opt->device.isEmpty())
+            request.device = opt->device;
+        if (opt->speedKhz > 0)
+            request.config.speed = opt->speedKhz;
+    }
     request.workDir = m_project.directory();
     request.config.backend = settings.flashBackend();
     request.config.toolPath = settings.flashToolPath();
