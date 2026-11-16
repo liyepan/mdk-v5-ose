@@ -10,6 +10,7 @@
 #include "ui/CodeEditor.h"
 #include "ui/KeilStyle.h"
 #include "ui/LoadingOverlay.h"
+#include "ui/FileOptionsDialog.h"
 #include "ui/FindReplaceDialog.h"
 #include "ui/ManageProjectDialog.h"
 #include "ui/OptionsDialog.h"
@@ -922,6 +923,10 @@ void MainWindow::createDocks()
             this, &MainWindow::onOptionsForTarget);
     connect(m_projectTree, &ProjectTree::optionsForFileRequested,
             this, &MainWindow::onOptionsForFile);
+    connect(m_projectTree, &ProjectTree::optionsForGroupRequested,
+            this, &MainWindow::onOptionsForGroup);
+    connect(m_projectTree, &ProjectTree::includeInBuildToggled,
+            this, &MainWindow::onIncludeInBuildToggled);
     connect(m_projectTree, &ProjectTree::openWithEncodingRequested,
             this, &MainWindow::onOpenWithEncoding);
 
@@ -976,6 +981,7 @@ void MainWindow::onNewFile()
     });
     editor->setJumpResolver([this](const QString& word) { return jumpTargetsFor(word); });
     connect(editor, &CodeEditor::jumpRequested, this, &MainWindow::onJumpTo);
+    editor->setCompletions(completionWords());
 
     const QString baseTitle = QStringLiteral("untitled%1").arg(++untitledCounter);
     editor->setProperty("baseTitle", baseTitle);
@@ -1253,6 +1259,11 @@ void MainWindow::applyProject()
     populateTargetCombo();
     applyProbe.mark("target combo");
     populateSymbolCombo();   // 符号表已经在后台建好了，这里只填下拉框
+    // 自动补全的词表也跟着换新的
+    for (int i = 0; i < m_tabs->count(); ++i) {
+        if (auto* editor = qobject_cast<CodeEditor*>(m_tabs->widget(i)))
+            editor->setCompletions(completionWords());
+    }
     applyProbe.mark("symbol combo");
 
     updateWindowTitle();
@@ -1375,6 +1386,7 @@ CodeEditor* MainWindow::openFile(const QString& absolutePath)
 
     editor->setJumpResolver([this](const QString& word) { return jumpTargetsFor(word); });
     connect(editor, &CodeEditor::jumpRequested, this, &MainWindow::onJumpTo);
+    editor->setCompletions(completionWords());
 
     editor->setProperty("baseTitle", QFileInfo(abs).fileName());
     const int index = m_tabs->addTab(editor, QFileInfo(abs).fileName());
@@ -1936,6 +1948,36 @@ void MainWindow::ensureSymbolIndex()
         m_symbols.build(m_project, m_activeTarget);
 }
 
+// 自动补全的词表：工程符号 + C/C++ 关键字。
+// 符号表是排好序的，这里直接拼在一起，QCompleter 按前缀过滤够用了。
+QStringList MainWindow::completionWords()
+{
+    ensureSymbolIndex();
+
+    static const QStringList keywords = {
+        QStringLiteral("auto"), QStringLiteral("break"), QStringLiteral("case"),
+        QStringLiteral("char"), QStringLiteral("const"), QStringLiteral("continue"),
+        QStringLiteral("default"), QStringLiteral("do"), QStringLiteral("double"),
+        QStringLiteral("else"), QStringLiteral("enum"), QStringLiteral("extern"),
+        QStringLiteral("float"), QStringLiteral("for"), QStringLiteral("goto"),
+        QStringLiteral("if"), QStringLiteral("inline"), QStringLiteral("int"),
+        QStringLiteral("long"), QStringLiteral("register"), QStringLiteral("restrict"),
+        QStringLiteral("return"), QStringLiteral("short"), QStringLiteral("signed"),
+        QStringLiteral("sizeof"), QStringLiteral("static"), QStringLiteral("struct"),
+        QStringLiteral("switch"), QStringLiteral("typedef"), QStringLiteral("union"),
+        QStringLiteral("unsigned"), QStringLiteral("void"), QStringLiteral("volatile"),
+        QStringLiteral("while"), QStringLiteral("NULL"), QStringLiteral("true"),
+        QStringLiteral("false"), QStringLiteral("uint8_t"), QStringLiteral("uint16_t"),
+        QStringLiteral("uint32_t"), QStringLiteral("int8_t"), QStringLiteral("int16_t"),
+        QStringLiteral("int32_t"), QStringLiteral("size_t")
+    };
+
+    QStringList words = m_symbols.names();
+    words += keywords;
+    words.removeDuplicates();
+    return words;
+}
+
 QStringList MainWindow::currentIncludeDirs() const
 {
     QStringList dirs;
@@ -2294,13 +2336,107 @@ void MainWindow::onOptionsForTarget()
     m_statusMessage->setText(Lang::t("Options saved."));
 }
 
+// 文件级选项：宏 / include / 杂项 + 是否参与编译
 void MainWindow::onOptionsForFile(const QString& path)
 {
-    Q_UNUSED(path);
-    QMessageBox::information(
-        this, Lang::t("Options for File"),
-        QStringLiteral("文件级选项的编辑界面将在下一步补上。\n"
-                       "当前可以在 Options for Target 里设置公共选项。"));
+    Target* target = m_project.target(m_activeTarget);
+    if (!target)
+        return;
+
+    for (ProjGroup& group : target->groups) {
+        for (ProjFile& file : group.files) {
+            if (Uvproj::resolvePath(m_project.directory(), file.path) != path)
+                continue;
+
+            FileOptionsDialog dialog(FileOptionsDialog::Kind::File,
+                                     QStringLiteral("%1 - %2").arg(Lang::t("Options for File"),
+                                                                   file.name),
+                                     this);
+            dialog.setIncludeInBuild(file.includeInBuild);
+            dialog.setOptions(file.defines, file.includePaths, file.misc);
+            if (dialog.exec() != QDialog::Accepted)
+                return;
+
+            file.includeInBuild = dialog.includeInBuild();
+            file.excluded = !file.includeInBuild || group.excluded;
+            file.defines = dialog.defines();
+            file.includePaths = dialog.includePaths();
+            file.misc = dialog.misc();
+            // 用户明确编辑过，就算全空了也要覆盖写一次（否则改不回"继承"）
+            file.hasOwnOptions = true;
+
+            saveGroupsAndRefresh(target, QStringLiteral("%1 的选项已更新").arg(file.name));
+            return;
+        }
+    }
+}
+
+// 组级选项：同一套界面
+void MainWindow::onOptionsForGroup(const QString& groupName)
+{
+    Target* target = m_project.target(m_activeTarget);
+    if (!target)
+        return;
+
+    for (ProjGroup& group : target->groups) {
+        if (group.name != groupName)
+            continue;
+
+        FileOptionsDialog dialog(FileOptionsDialog::Kind::Group,
+                                 QStringLiteral("%1 - %2").arg(Lang::t("Options for Group"),
+                                                               group.name),
+                                 this);
+        dialog.setIncludeInBuild(!group.excluded);
+        dialog.setOptions(group.defines, group.includePaths, group.misc);
+        if (dialog.exec() != QDialog::Accepted)
+            return;
+
+        group.excluded = !dialog.includeInBuild();
+        group.defines = dialog.defines();
+        group.includePaths = dialog.includePaths();
+        group.misc = dialog.misc();
+        group.hasOwnOptions = true;
+
+        saveGroupsAndRefresh(target, QStringLiteral("%1 组的选项已更新").arg(group.name));
+        return;
+    }
+}
+
+// 工程树里切换"参与编译"
+void MainWindow::onIncludeInBuildToggled(const QString& absolutePath, bool include)
+{
+    Target* target = m_project.target(m_activeTarget);
+    if (!target)
+        return;
+
+    for (ProjGroup& group : target->groups) {
+        for (ProjFile& file : group.files) {
+            if (Uvproj::resolvePath(m_project.directory(), file.path) != absolutePath)
+                continue;
+            if (file.includeInBuild == include)
+                return;
+
+            file.includeInBuild = include;
+            file.excluded = !include || group.excluded;
+            saveGroupsAndRefresh(target,
+                                 include ? QStringLiteral("%1 已加回构建").arg(file.name)
+                                         : QStringLiteral("%1 已从构建中排除").arg(file.name));
+            return;
+        }
+    }
+}
+
+// 改完工程里某个分组/文件后：写回 + 刷新树和符号表
+void MainWindow::saveGroupsAndRefresh(Target* target, const QString& message)
+{
+    QString error;
+    if (!Uvproj::saveGroups(m_project.filePath, *target, &error)) {
+        QMessageBox::warning(this, Lang::t("Manage Project Items"), error);
+        return;
+    }
+    m_symbols.clear();
+    m_projectTree->setProject(m_project, m_activeTarget);
+    m_statusMessage->setText(message);
 }
 
 void MainWindow::onBuild()

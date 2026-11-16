@@ -2,6 +2,7 @@
 
 #include <QFont>
 #include <QList>
+#include <QStringList>
 #include <QPlainTextEdit>
 #include <QPoint>
 #include <QSet>
@@ -10,6 +11,8 @@
 #include <functional>
 
 class LineNumberArea;
+class QCompleter;
+class QStringListModel;
 
 // 右键菜单里的一条跳转（"跳转定义" / "跳转实现"）
 struct JumpTarget
@@ -46,6 +49,10 @@ public:
 
     // 判断某个标识符能不能跳转（由主窗口接上符号表）
     void setSymbolChecker(std::function<bool(const QString&)> checker);
+
+    // 自动补全的词表（工程符号 + C 关键字），空表就关掉补全
+    void setCompletions(const QStringList& words);
+    void setCompletionsEnabled(bool on);
 
     // 某个标识符的跳转目标（定义 / 实现），右键菜单用
     void setJumpResolver(std::function<QList<JumpTarget>(const QString&)> resolver);
@@ -114,6 +121,9 @@ private:
     void updateHoverSelection(const QTextCursor& cursor, bool ctrlHeld);
     void refreshHover();
     QString wordAtPosition(const QPoint& pos) const;
+    void updateCompletion();
+    void insertCompletion(const QString& text);
+    void highlightBrackets(QList<QTextEdit::ExtraSelection>& selections);
 
     LineNumberArea* m_lineNumberArea = nullptr;
     qreal           m_pointSize = 0.0;
@@ -124,6 +134,9 @@ private:
     std::function<bool(const QString&)> m_symbolChecker;
     std::function<QList<JumpTarget>(const QString&)> m_jumpResolver;
     QPoint          m_lastMousePos;
+    QCompleter*     m_completer = nullptr;
+    QStringListModel* m_completionModel = nullptr;
+    bool            m_completionEnabled = true;
     QString         m_filePath;
     bool            m_assembly = false;
 };

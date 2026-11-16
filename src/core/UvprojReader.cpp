@@ -633,6 +633,40 @@ bool saveGroups(const QString& path, const Target& target, QString* error)
         return el;
     };
 
+    // 把 Define / IncludePath / MiscControls 写进 <XxxAds><Cads><VariousControls>
+    auto writeVarious = [&doc](QDomElement adParent, const QString& defines,
+                               const QString& includes, const QString& misc) {
+        const QStringList chain = { QStringLiteral("VariousControls") };
+        QDomElement various = adParent.firstChildElement(QStringLiteral("VariousControls"));
+        if (various.isNull()) {
+            various = doc.createElement(QStringLiteral("VariousControls"));
+            adParent.appendChild(various);
+        }
+        Q_UNUSED(chain)
+        auto setText = [&doc](QDomElement parent, const QString& tag, const QString& value) {
+            QDomElement el = parent.firstChildElement(tag);
+            if (el.isNull()) {
+                el = doc.createElement(tag);
+                parent.appendChild(el);
+            }
+            while (!el.firstChild().isNull())
+                el.removeChild(el.firstChild());
+            el.appendChild(doc.createTextNode(value));
+        };
+        setText(various, QStringLiteral("Define"), defines);
+        setText(various, QStringLiteral("IncludePath"), includes);
+        setText(various, QStringLiteral("MiscControls"), misc);
+    };
+
+    auto ensureChildEl = [&doc](QDomElement parent, const QString& tag) {
+        QDomElement el = parent.firstChildElement(tag);
+        if (el.isNull()) {
+            el = doc.createElement(tag);
+            parent.appendChild(el);
+        }
+        return el;
+    };
+
     for (const ProjGroup& group : target.groups) {
         QDomElement gEl = doc.createElement(QStringLiteral("Group"));
         appendText(gEl, QStringLiteral("GroupName"), group.name);
@@ -648,6 +682,14 @@ bool saveGroups(const QString& path, const Target& target, QString* error)
                     continue;
                 gEl.appendChild(node.cloneNode(true));
             }
+        }
+
+        // 组级选项：用户在对话框里改过的话覆盖写一遍
+        if (group.hasOwnOptions) {
+            QDomElement gOption = ensureChildEl(gEl, QStringLiteral("GroupOption"));
+            QDomElement gAds = ensureChildEl(gOption, QStringLiteral("GroupArmAds"));
+            QDomElement gCads = ensureChildEl(gAds, QStringLiteral("Cads"));
+            writeVarious(gCads, group.defines, group.includePaths, group.misc);
         }
 
         QDomElement filesEl = doc.createElement(QStringLiteral("Files"));
@@ -673,6 +715,14 @@ bool saveGroups(const QString& path, const Target& target, QString* error)
                         continue;
                     fEl.appendChild(node.cloneNode(true));
                 }
+            }
+
+            // 文件级选项：覆盖 Target / Group 的宏和 include
+            if (pf.hasOwnOptions) {
+                QDomElement fOption = ensureChildEl(fEl, QStringLiteral("FileOption"));
+                QDomElement fAds = ensureChildEl(fOption, QStringLiteral("FileArmAds"));
+                QDomElement fCads = ensureChildEl(fAds, QStringLiteral("Cads"));
+                writeVarious(fCads, pf.defines, pf.includePaths, pf.misc);
             }
 
             // IncludeInBuild：只有"排除"或者原来就写过这个节点时才动，

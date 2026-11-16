@@ -168,11 +168,13 @@ void ProjectTree::showContextMenu(const QPoint& pos)
 
     menu.addSeparator();
     QAction* fileOptions = menu.addAction(Lang::t("Options for File..."));
+    QAction* groupOptions = menu.addAction(Lang::t("Options for Group..."));
     QAction* targetOptions = menu.addAction(Lang::t("Options for Target..."));
 
     open->setEnabled(kind == 2);
     encodingMenu->setEnabled(kind == 2);
     fileOptions->setEnabled(kind == 2);
+    groupOptions->setEnabled(kind == 1);
 
     QAction* chosen = menu.exec(m_tree->viewport()->mapToGlobal(pos));
     if (!chosen)
@@ -189,6 +191,8 @@ void ProjectTree::showContextMenu(const QPoint& pos)
                                    includeAction->isChecked());
     } else if (chosen == fileOptions && kind == 2) {
         emit optionsForFileRequested(item->data(0, kRolePath).toString());
+    } else if (chosen == groupOptions && kind == 1) {
+        emit optionsForGroupRequested(item->text(0));
     } else if (chosen == targetOptions) {
         emit optionsForTargetRequested();
     }

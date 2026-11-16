@@ -30,6 +30,7 @@ signals:
     void openWithEncodingRequested(const QString& absolutePath, const QString& encoding);
     // 右键菜单里切换"参与编译"，include=true 表示加回构建
     void includeInBuildToggled(const QString& absolutePath, bool include);
+    void optionsForGroupRequested(const QString& groupName);
 
 private:
     void rebuildTree();

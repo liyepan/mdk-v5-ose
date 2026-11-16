@@ -58,6 +58,9 @@ private slots:
     void onOptionsForTarget();
     void onManageProjectItems();
     void onOptionsForFile(const QString& path);
+    void onOptionsForGroup(const QString& groupName);
+    void onIncludeInBuildToggled(const QString& absolutePath, bool include);
+    void saveGroupsAndRefresh(Target* target, const QString& message);
     void onConfigureToolchain();
     void onBuild();
     void onRebuild();
@@ -148,6 +151,7 @@ private:
     void ensureSymbolIndex();
     QList<JumpTarget> jumpTargetsFor(const QString& word);
     QStringList currentIncludeDirs() const;
+    QStringList completionWords();
 
     CodeEditor* openFile(const QString& absolutePath);
     CodeEditor* currentEditor() const;

@@ -6,8 +6,12 @@
 #include "ui/CSyntaxHighlighter.h"
 #include "ui/KeilStyle.h"
 
+#include <QAbstractItemView>
 #include <QApplication>
+#include <QCompleter>
 #include <QContextMenuEvent>
+#include <QScrollBar>
+#include <QStringListModel>
 #include <QFile>
 #include <QKeyEvent>
 #include <QFileInfo>
@@ -91,7 +95,10 @@ CodeEditor::CodeEditor(QWidget* parent)
 
     connect(this, &CodeEditor::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
     connect(this, &CodeEditor::updateRequest, this, &CodeEditor::updateLineNumberArea);
-    connect(this, &CodeEditor::cursorPositionChanged, this, &CodeEditor::onCursorMoved);
+    // 注意这里是 QPlainTextEdit 的信号：CodeEditor 自己的 cursorPositionChanged
+    // 是给主窗口用的（带行列号），如果连它自己会递归。
+    // 之前接错了信号，导致光标移动时当前行高亮和状态栏的 Ln/Col 都不更新。
+    connect(this, &QPlainTextEdit::cursorPositionChanged, this, &CodeEditor::onCursorMoved);
 
     updateLineNumberAreaWidth(0);
     highlightCurrentLine();
@@ -245,6 +252,86 @@ void CodeEditor::setSymbolChecker(std::function<bool(const QString&)> checker)
 void CodeEditor::setJumpResolver(std::function<QList<JumpTarget>(const QString&)> resolver)
 {
     m_jumpResolver = std::move(resolver);
+}
+
+// ---------------------------------------------------------------- 自动补全
+
+void CodeEditor::setCompletions(const QStringList& words)
+{
+    if (!m_completer) {
+        m_completionModel = new QStringListModel(this);
+        m_completer = new QCompleter(m_completionModel, this);
+        m_completer->setWidget(this);
+        m_completer->setCompletionMode(QCompleter::PopupCompletion);
+        m_completer->setCaseSensitivity(Qt::CaseSensitive);
+        m_completer->setFilterMode(Qt::MatchStartsWith);
+        m_completer->setMaxVisibleItems(12);
+        m_completer->popup()->setFont(font());
+
+        connect(m_completer, QOverload<const QString&>::of(&QCompleter::activated), this,
+                [this](const QString& text) { insertCompletion(text); });
+    }
+
+    m_completionModel->setStringList(words);
+}
+
+void CodeEditor::setCompletionsEnabled(bool on)
+{
+    m_completionEnabled = on;
+    if (!on && m_completer)
+        m_completer->popup()->hide();
+}
+
+void CodeEditor::updateCompletion()
+{
+    if (!m_completer || !m_completionEnabled || m_completionModel->rowCount() == 0)
+        return;
+
+    // 取光标前面的那个标识符
+    const QTextCursor tc = textCursor();
+    const QTextBlock block = tc.block();
+    const int col = tc.positionInBlock();
+    const QString line = block.text();
+
+    int start = col;
+    while (start > 0) {
+        const QChar c = line.at(start - 1);
+        if (c.isLetterOrNumber() || c == QLatin1Char('_'))
+            --start;
+        else
+            break;
+    }
+    const QString prefix = line.mid(start, col - start);
+
+    // 一个字符就弹太吵，至少两个；而且必须是标识符开头
+    if (prefix.size() < 2 || !(prefix.at(0).isLetter() || prefix.at(0) == QLatin1Char('_'))) {
+        m_completer->popup()->hide();
+        return;
+    }
+
+    m_completer->setCompletionPrefix(prefix);
+    if (m_completer->completionCount() == 0) {
+        m_completer->popup()->hide();
+        return;
+    }
+
+    QRect rect = cursorRect();
+    rect.setWidth(m_completer->popup()->sizeHintForColumn(0)
+                  + m_completer->popup()->verticalScrollBar()->sizeHint().width() + 8);
+    m_completer->complete(rect);
+}
+
+void CodeEditor::insertCompletion(const QString& text)
+{
+    if (!m_completer)
+        return;
+
+    QTextCursor tc = textCursor();
+    const int extra = text.length() - m_completer->completionPrefix().length();
+    tc.movePosition(QTextCursor::Left);
+    tc.movePosition(QTextCursor::EndOfWord);
+    tc.insertText(text.right(qMax(0, extra)));
+    setTextCursor(tc);
 }
 
 // 光标是否落在 #include "xxx.h" 的文件名上
@@ -657,9 +744,35 @@ void CodeEditor::refreshHover()
 
 void CodeEditor::keyPressEvent(QKeyEvent* event)
 {
+    // 补全弹窗开着的时候，回车/ESC/Tab 交给它处理
+    if (m_completer && m_completer->popup()->isVisible()) {
+        switch (event->key()) {
+        case Qt::Key_Enter:
+        case Qt::Key_Return:
+        case Qt::Key_Escape:
+        case Qt::Key_Tab:
+        case Qt::Key_Backtab:
+            event->ignore();
+            return;
+        default:
+            break;
+        }
+    }
+
     QPlainTextEdit::keyPressEvent(event);
+
     if (event->key() == Qt::Key_Control)
         refreshHover();
+
+    // 打了字母/数字/下划线就更新补全
+    const QString inserted = event->text();
+    if (!inserted.isEmpty()) {
+        const QChar c = inserted.at(0);
+        if (c.isLetterOrNumber() || c == QLatin1Char('_'))
+            updateCompletion();
+        else if (m_completer)
+            m_completer->popup()->hide();
+    }
 }
 
 void CodeEditor::keyReleaseEvent(QKeyEvent* event)
@@ -891,6 +1004,86 @@ void CodeEditor::resizeEvent(QResizeEvent* event)
     m_lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()));
 }
 
+// 光标旁边是括号的话，把配对的那个也高亮出来
+void CodeEditor::highlightBrackets(QList<QTextEdit::ExtraSelection>& selections)
+{
+    QTextDocument* doc = document();
+    const int pos = textCursor().position();
+
+    auto isBracket = [](QChar c) {
+        return c == QLatin1Char('(') || c == QLatin1Char(')') || c == QLatin1Char('[')
+               || c == QLatin1Char(']') || c == QLatin1Char('{') || c == QLatin1Char('}');
+    };
+    auto partner = [](QChar c) -> QChar {
+        switch (c.unicode()) {
+        case '(': return QLatin1Char(')');
+        case ')': return QLatin1Char('(');
+        case '[': return QLatin1Char(']');
+        case ']': return QLatin1Char('[');
+        case '{': return QLatin1Char('}');
+        case '}': return QLatin1Char('{');
+        default:  return QChar();
+        }
+    };
+
+    // 光标前一个字符优先（刚打完右括号时），其次光标处
+    int index = -1;
+    QChar bracket;
+    if (pos > 0) {
+        const QChar c = doc->characterAt(pos - 1);
+        if (isBracket(c)) {
+            index = pos - 1;
+            bracket = c;
+        }
+    }
+    if (index < 0 && pos < doc->characterCount() - 1) {
+        const QChar c = doc->characterAt(pos);
+        if (isBracket(c)) {
+            index = pos;
+            bracket = c;
+        }
+    }
+    if (index < 0)
+        return;
+
+    const bool forward = (bracket == QLatin1Char('(') || bracket == QLatin1Char('[')
+                          || bracket == QLatin1Char('{'));
+    const QChar want = partner(bracket);
+
+    int depth = 0;
+    int match = -1;
+    for (int i = index; forward ? i < doc->characterCount() - 1 : i >= 0; forward ? ++i : --i) {
+        const QChar c = doc->characterAt(i);
+        if (c == bracket)
+            ++depth;
+        else if (c == want) {
+            --depth;
+            if (depth == 0) {
+                match = i;
+                break;
+            }
+        }
+        if (!forward && i == 0)
+            break;
+    }
+    if (match < 0)
+        return;
+
+    QTextCharFormat fmt;
+    fmt.setBackground(QColor(0xd8, 0xe6, 0xf8));
+    fmt.setFontWeight(QFont::Bold);
+
+    for (int i : { index, match }) {
+        QTextEdit::ExtraSelection sel;
+        QTextCursor cursor(doc);
+        cursor.setPosition(i);
+        cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor);
+        sel.cursor = cursor;
+        sel.format = fmt;
+        selections.append(sel);
+    }
+}
+
 void CodeEditor::highlightCurrentLine()
 {
     QList<QTextEdit::ExtraSelection> selections;
@@ -912,6 +1105,10 @@ void CodeEditor::highlightCurrentLine()
         hover.cursor = m_hoverCursor;
         selections.append(hover);
     }
+
+    // 括号配对高亮
+    if (!isReadOnly())
+        highlightBrackets(selections);
 
     setExtraSelections(selections);
 }
