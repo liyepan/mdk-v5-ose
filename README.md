@@ -225,6 +225,18 @@ GitHub 一旦发现 Release 的 tag 没了，会把 Release 变成**草稿**，
 **验证**：`git ls-remote --tags https://github.com/liyepan/mdk-v5-ose.git` 是空的，
 Gitea 和本地也都没有 tag —— 说明 tag 在 GitHub 上被创建过又被删了。
 
+### 发版流程（就这么简单）
+
+改 `mdk-v5-ose.pro` 里的 `VERSION`，提交之后**顺手打个 tag 一起推**：
+
+```bash
+git tag v0.2.0
+git push origin main v0.2.0
+```
+
+tag 推到 Gitea（源仓库）→ 镜像带到 GitHub → 工作流的 Release 就挂在这个 tag 上。
+tag 两边都有，镜像的 prune 不会动它，Release 也就不会掉成草稿。
+
 ### 三种修法（按推荐顺序）
 
 1. **治本：关掉 Gitea 镜像的 prune**
