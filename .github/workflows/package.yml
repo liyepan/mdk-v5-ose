@@ -2,7 +2,14 @@ name: 安装包
 
 # 本项目目标平台只有 Windows，所以这里只出 Windows 安装包：
 #   x86_64  NSIS 安装包 + 便携 zip
-#   arm64   NSIS 安装包（默认关闭，见 windows-arm64 的说明）
+#
+# 没有 arm64：Qt 5.15 根本没有 Windows-ARM64 的二进制包
+#   （官方源里 5.15.2 只有 win64_msvc2019_64 / win64_msvc2015_64 /
+#     win64_mingw81 / win32_msvc2019 / win32_mingw81，Qt 6.2 才加 arm64）
+# ARM64 的 Windows 装 x64 包就行，系统自带 x64 模拟。
+# 真要做原生 arm64 得先升 Qt 6：
+#   6.5.x  win64_msvc2019_arm64
+#   6.8.x  win64_msvc2022_arm64_cross_compiled
 #
 # Gitea 也会读 .github/workflows，所以每个 job 都有
 #   if: github.server_url == 'https://github.com'
