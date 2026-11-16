@@ -13,6 +13,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+  # 每小时自检一次：Gitea 的推送镜像如果开了 prune，
+  # 会把只存在于 GitHub 的 tag 删掉，Release 于是变成草稿（页面上就"没了"）。
+  # 这个定时任务负责把 tag 补回来、把草稿重新发布出去。
+  schedule:
+    - cron: "17 * * * *"
 
 permissions:
   contents: write
@@ -28,7 +33,8 @@ env:
 jobs:
   windows-x86_64:
     name: Windows x86_64
-    if: ${{ github.server_url == 'https://github.com' }}
+    # schedule 是为了修复 Release 的，不用重新编译一遍 40 分钟的 Windows 包
+    if: ${{ github.server_url == 'https://github.com' && github.event_name != 'schedule' }}
     runs-on: windows-2022
     timeout-minutes: 40
     steps:
@@ -202,6 +208,22 @@ jobs:
           xargs sha256sum < /tmp/files.txt > SHA256SUMS
           cat SHA256SUMS
 
+      # 如果这个 tag 之前被镜像 prune 掉、Release 掉成了草稿，
+      # 这里先把草稿发布出去；后面的 softprops 会更新同一个 Release，不会重复创建
+      - name: 同名的草稿先发布
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.meta.outputs.version) }}
+        run: |
+          set -u
+          ids=$(gh api --paginate "/repos/$GITHUB_REPOSITORY/releases" \
+                 --jq '.[] | select(.draft) | "\(.id) \(.tag_name)"' | awk -v t="$TAG" '$2==t {print $1}')
+          for id in $ids; do
+            echo "发现草稿 Release #$id（tag=$TAG），直接发布"
+            gh api -X PATCH "/repos/$GITHUB_REPOSITORY/releases/$id" -F draft=false
+          done
+          [ -z "$ids" ] && echo "没有草稿，正常创建"
+
       - name: 挂到 Release
         uses: softprops/action-gh-release@v2
         with:
@@ -214,3 +236,42 @@ jobs:
           make_latest: "true"
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  repair-releases:
+    name: 修复被镜像删掉的 Release
+    # 只在 GitHub 上、且只在定时/手动触发时跑；Gitea 那边同一个文件也会被读，直接跳过
+    if: >-
+      github.server_url == 'https://github.com' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: 补 tag + 取消草稿
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          repo="$GITHUB_REPOSITORY"
+          gh api --paginate "/repos/$repo/releases" \
+            --jq '.[] | select(.draft) | "\(.id)\t\(.tag_name)\t\(.target_commitish)"' > /tmp/drafts.tsv
+          if [ ! -s /tmp/drafts.tsv ]; then
+            echo "没有草稿 Release，什么都不用做"
+            exit 0
+          fi
+          while IFS=$'\t' read -r id tag target; do
+            [ -z "$tag" ] && continue
+            if gh api "/repos/$repo/git/ref/tags/$tag" >/dev/null 2>&1; then
+              echo "$tag 的 tag 还在"
+            else
+              sha=$(gh api "/repos/$repo/commits/$target" --jq .sha 2>/dev/null || true)
+              if [ -z "$sha" ]; then
+                echo "跳过 $tag：拿不到 $target 的 commit" >&2
+                continue
+              fi
+              echo "$tag 的 tag 被删了，按 $sha 补回来"
+              gh api -X POST "/repos/$repo/git/refs" -f "ref=refs/tags/$tag" -f "sha=$sha" >/dev/null
+            fi
+            echo "发布草稿 Release #$id（$tag）"
+            gh api -X PATCH "/repos/$repo/releases/$id" -F draft=false >/dev/null
+          done < /tmp/drafts.tsv
+          echo "修复完成"

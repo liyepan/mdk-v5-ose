@@ -210,6 +210,46 @@ Project Targets:      Groups:              Files:
 - Pack Manager（按需求不做）
 - 文件级 / 组级编译选项的编辑（现在只能保留 Keil 里配好的，不能在应用里改）
 
+## Release 会过几天"消失"？—— 是 Gitea 推送镜像 prune 掉的
+
+**症状**：Actions 里"安装包"跑成功、Release 也发出来了，过几天 GitHub 上
+Releases 页面空了，`git ls-remote --tags` 也看不到 `v0.2.0`。
+
+**原因**：发版流程里那个 `v0.2.0` tag **只在 GitHub 上创建**
+（工作流里写死了 "只推 GitHub"），Gitea 那边没有这个 tag。
+如果 Gitea 的推送镜像开了 **"启用 prune"**，它每次同步都会把远端
+（GitHub）上"本地没有"的 ref 删掉 —— tag 就这样被删了。
+GitHub 一旦发现 Release 的 tag 没了，会把 Release 变成**草稿**，
+草稿不出现在 Releases 页面，所以看着就像"没了"。
+
+**验证**：`git ls-remote --tags https://github.com/liyepan/mdk-v5-ose.git` 是空的，
+Gitea 和本地也都没有 tag —— 说明 tag 在 GitHub 上被创建过又被删了。
+
+### 三种修法（按推荐顺序）
+
+1. **治本：关掉 Gitea 镜像的 prune**
+   仓库 → 设置 → 仓库 → 推送镜像 → 编辑 → 取消勾选 "启用 prune"（删除远端多余引用）。
+   关掉之后镜像只做"推送本地已有的 ref"，不会删 GitHub 上的 tag。
+
+2. **治本（不依赖设置）：发版时在本地打 tag 推到 Gitea**
+   ```bash
+   git tag v0.2.0 && git push origin v0.2.0
+   ```
+   这样 Gitea 和 GitHub 上都有这个 tag，prune 也不会删它，
+   Release 就永远挂在同一个 tag 上。
+
+3. **兜底：工作流每小时自愈**（已经加上了）
+   `repair-releases` job 每小时检查一次草稿 Release：
+   tag 没了就按 `target_commitish` 补回来，然后把草稿重新发布。
+   ```
+   gh api /repos/$repo/git/ref/tags/$tag      # 没了？
+   gh api -X POST /repos/$repo/git/refs ...   # 补 tag
+   gh api -X PATCH /repos/$repo/releases/$id -F draft=false   # 取消草稿
+   ```
+
+注意：`schedule` 触发时 **不会**重新跑 40 分钟的 Windows 编译（`windows-x86_64` 加了
+`github.event_name != 'schedule'` 守卫），自愈 job 几秒钟就完事。
+
 ## 构建
 
 前置：Qt 5.12+（Widgets + Xml），CMake 3.16+ 或 qmake，Windows 上 MSVC 2017/2019 或 MinGW。
